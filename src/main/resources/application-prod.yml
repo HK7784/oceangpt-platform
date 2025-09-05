@@ -1,0 +1,48 @@
+# 生产环境配置
+spring:
+  profiles:
+    active: prod
+  
+  datasource:
+    url: jdbc:h2:mem:proddb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+  
+  h2:
+    console:
+      enabled: false
+
+server:
+  port: ${PORT:8080}
+  
+cors:
+  allowed-origins: 
+    - https://oceangpt-frontend.vercel.app
+    - https://oceangpt-frontend.railway.app
+    - https://your-frontend-domain.com
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowed-headers:
+    - "*"
+  allow-credentials: true
+
+logging:
+  level:
+    com.oceangpt: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
