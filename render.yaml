@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: oceangpt-backend
+    env: java
+    plan: free
+    buildCommand: ./mvnw clean package -DskipTests
+    startCommand: java -Xmx512m -Xms256m -jar target/OceanGPT-Java-Deployment-1.0-SNAPSHOT.jar
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: SERVER_PORT
+        value: 10000
+      - key: JAVA_OPTS
+        value: "-Xmx512m -Xms256m"
+    healthCheckPath: /api/health
+    autoDeploy: true
+    region: singapore
+    disk:
+      name: oceangpt-data
+      mountPath: /data
+      sizeGB: 1
