@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: oceangpt-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: PORT
+        value: 10000
+      - key: JAVA_OPTS
+        value: "-Xmx512m -Xms256m"
+    healthCheckPath: /api/health
+    autoDeploy: true
+    region: oregon
+    disk:
+      name: oceangpt-disk
+      mountPath: /data
+      sizeGB: 1
