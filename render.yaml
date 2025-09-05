@@ -1,10 +1,9 @@
 services:
   - type: web
     name: oceangpt-backend
-    env: java
+    runtime: docker
     plan: free
-    buildCommand: ./mvnw clean package -DskipTests
-    startCommand: java -Xmx512m -Xms256m -jar target/OceanGPT-Java-Deployment-1.0-SNAPSHOT.jar
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
@@ -14,8 +13,8 @@ services:
         value: "-Xmx512m -Xms256m"
     healthCheckPath: /api/health
     autoDeploy: true
-    region: singapore
+    region: oregon
     disk:
-      name: oceangpt-data
+      name: oceangpt-disk
       mountPath: /data
       sizeGB: 1
