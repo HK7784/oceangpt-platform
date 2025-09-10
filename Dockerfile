@@ -1,6 +1,6 @@
 # OceanGPT海水水质监测系统 Docker镜像
 # 多阶段构建：构建阶段
-FROM maven:3.9.6-openjdk-17-slim AS builder
+FROM maven:3.8.6-openjdk-17-slim AS builder
 
 # 设置工作目录
 WORKDIR /app
@@ -68,4 +68,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:$PORT/api/health || exit 1
 
 # 启动应用
+
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dserver.port=$PORT -jar app.jar"]
