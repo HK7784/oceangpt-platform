@@ -32,11 +32,11 @@ ENV PATH="/app/venv/bin:$PATH"
 
 # 安装Python依赖
 RUN pip install --no-cache-dir \
-    torch==2.0.1 \
-    torchvision==0.15.2 \
-    numpy==1.24.3 \
-    scikit-learn==1.3.0 \
-    pandas==2.0.3
+    torch>=2.1.0 \
+    torchvision>=0.16.0 \
+    numpy>=1.24.0 \
+    scikit-learn>=1.3.0 \
+    pandas>=2.0.0
 
 # 从构建阶段复制JAR文件
 COPY --from=builder /app/target/OceanGPT-Java-Deployment-*.jar app.jar
