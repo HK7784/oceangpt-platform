@@ -1,6 +1,6 @@
 # OceanGPT海水水质监测系统 Docker镜像
 # 多阶段构建：构建阶段
-FROM maven:3.8.6-eclipse-temurin-17-alpine AS builder
+FROM maven:3.8.6-eclipse-temurin-17 AS builder
 
 # 设置工作目录
 WORKDIR /app
@@ -12,31 +12,41 @@ COPY src ./src
 # 构建应用
 RUN mvn clean package -DskipTests
 
-# 运行阶段
-FROM eclipse-temurin:17-jre-alpine AS runtime
+# 运行阶段 - 使用Ubuntu而不是Alpine
+FROM eclipse-temurin:17-jre AS runtime
 
 # 设置工作目录
 WORKDIR /app
 
-# 安装必要的系统依赖（包括Python）
-RUN apk add --no-cache \
+# 更新包管理器并安装必要的系统依赖
+RUN apt-get update && apt-get install -y \
     curl \
     wget \
     python3 \
-    py3-pip \
-    python3-dev
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # 创建Python虚拟环境
 RUN python3 -m venv /app/venv
 ENV PATH="/app/venv/bin:$PATH"
 
-# 安装Python依赖
+# 升级pip
+RUN pip install --upgrade pip
+
+# 安装PyTorch CPU版本（适合云部署）
 RUN pip install --no-cache-dir \
-    torch>=2.1.0 \
-    torchvision>=0.16.0 \
-    numpy>=1.24.0 \
-    scikit-learn>=1.3.0 \
-    pandas>=2.0.0
+    torch==2.1.2+cpu \
+    torchvision==0.16.2+cpu \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# 安装其他Python依赖
+RUN pip install --no-cache-dir \
+    numpy==1.24.3 \
+    scikit-learn==1.3.0 \
+    pandas==2.0.3
 
 # 从构建阶段复制JAR文件
 COPY --from=builder /app/target/OceanGPT-Java-Deployment-*.jar app.jar
