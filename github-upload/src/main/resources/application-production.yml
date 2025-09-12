@@ -1,0 +1,169 @@
+# OceanGPT生产环境配置
+spring:
+  application:
+    name: oceangpt-water-quality-system
+  
+  # 数据库配置
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/oceangpt}
+    username: ${DATABASE_USERNAME:oceangpt}
+    password: ${DATABASE_PASSWORD:oceangpt123}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+      leak-detection-threshold: 60000
+  
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        use_sql_comments: false
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+  
+  # Redis缓存配置
+  redis:
+    host: ${REDIS_HOST:oceangpt-redis}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: 0
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 5
+        max-wait: 2000ms
+  
+  # Web配置
+  web:
+    resources:
+      static-locations: file:${STATIC_PATH:/app/static}/
+      cache:
+        period: 31536000  # 1年缓存
+  
+  # 文件上传配置
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+# 服务器配置
+server:
+  port: 8080
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+  http2:
+    enabled: true
+  error:
+    include-stacktrace: never
+    include-message: always
+
+# OceanGPT配置
+oceangpt:
+  # vLLM服务配置
+  vllm:
+    url: ${OCEANGPT_VLLM_URL:http://localhost:8000}
+    model-name: ${OCEANGPT_VLLM_MODEL_NAME:OceanGPT-7B-v0.1}
+    max-tokens: ${OCEANGPT_VLLM_MAX_TOKENS:2048}
+    temperature: ${OCEANGPT_VLLM_TEMPERATURE:0.7}
+    timeout: ${OCEANGPT_VLLM_TIMEOUT:60000}
+  
+  # 模型配置
+  model:
+    mock-mode: ${MODEL_MOCK_MODE:false}
+    python-executable: ${PYTHON_EXECUTABLE:/app/venv/bin/python3}
+    model-path: ${MODEL_PATH:/app/models}
+    prediction-timeout: ${MODEL_PREDICTION_TIMEOUT:30000}
+    batch-size: ${MODEL_BATCH_SIZE:32}
+  
+  # 缓存配置
+  cache:
+    enabled: ${CACHE_ENABLED:true}
+    ttl: ${CACHE_TTL:3600}  # 1小时
+    max-size: ${CACHE_MAX_SIZE:1000}
+  
+  # 安全配置
+  security:
+    jwt:
+      secret: ${JWT_SECRET:oceangpt-jwt-secret-key-2024}
+      expiration: ${JWT_EXPIRATION:86400000}  # 24小时
+    api:
+      key: ${API_KEY:oceangpt-api-key-2024}
+  
+  # 外部API配置
+  external:
+    sentinel:
+      api-key: ${SENTINEL_API_KEY:}
+      base-url: ${SENTINEL_BASE_URL:https://scihub.copernicus.eu}
+
+# 日志配置
+logging:
+  level:
+    root: ${LOGGING_LEVEL_ROOT:INFO}
+    com.oceangpt: ${LOGGING_LEVEL_OCEANGPT:INFO}
+    org.springframework.web: WARN
+    org.hibernate: WARN
+    org.springframework.security: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId}] %logger{36} - %msg%n"
+  file:
+    name: ${LOG_FILE:/app/logs/oceangpt.log}
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 3GB
+
+# 监控配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS:health,info,metrics,prometheus}
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: ${MANAGEMENT_HEALTH_SHOW_DETAILS:when-authorized}
+      show-components: always
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: ${PROMETHEUS_ENABLED:true}
+    tags:
+      application: oceangpt
+      environment: production
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+
+# 跨域配置
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+  allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+  allowed-headers: ${CORS_ALLOWED_HEADERS:*}
+  allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
+  max-age: ${CORS_MAX_AGE:3600}
