@@ -38,8 +38,8 @@ RUN pip install --upgrade pip
 
 # 安装PyTorch CPU版本（适合云部署）
 RUN pip install --no-cache-dir \
-    torch==2.1.2+cpu \
-    torchvision==0.16.2+cpu \
+    torch==2.2.2+cpu \
+    torchvision==0.17.2+cpu \
     --index-url https://download.pytorch.org/whl/cpu
 
 # 安装其他Python依赖
