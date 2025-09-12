@@ -33,8 +33,8 @@ RUN apt-get update && apt-get install -y \
 RUN python3 -m venv /app/venv
 ENV PATH="/app/venv/bin:$PATH"
 
-# 升级pip
-RUN pip install --upgrade pip
+# 升级pip并安装setuptools
+RUN pip install --upgrade pip setuptools wheel
 
 # 安装PyTorch CPU版本（适合云部署）
 RUN pip install --no-cache-dir \
