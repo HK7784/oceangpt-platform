@@ -1,0 +1,115 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "generated_at": "2024-01-15T10:30:00Z",
+    "source": "test_data",
+    "description": "Sample ocean data for testing OceanGPT system"
+  },
+  "data": [
+    {
+      "timestamp": "2024-01-15T08:00:00Z",
+      "latitude": 35.6762,
+      "longitude": 139.6503,
+      "sea_surface_temperature": 15.5,
+      "salinity": 35.2,
+      "ph_level": 8.1,
+      "dissolved_oxygen": 8.0,
+      "chlorophyll_concentration": 0.5,
+      "turbidity": 2.1,
+      "pollution_index": 25.0,
+      "data_source": "buoy_station_001"
+    },
+    {
+      "timestamp": "2024-01-15T09:00:00Z",
+      "latitude": 35.6800,
+      "longitude": 139.6550,
+      "sea_surface_temperature": 15.8,
+      "salinity": 35.1,
+      "ph_level": 8.0,
+      "dissolved_oxygen": 7.9,
+      "chlorophyll_concentration": 0.6,
+      "turbidity": 2.3,
+      "pollution_index": 28.0,
+      "data_source": "satellite_modis"
+    },
+    {
+      "timestamp": "2024-01-15T10:00:00Z",
+      "latitude": 35.6850,
+      "longitude": 139.6600,
+      "sea_surface_temperature": 16.1,
+      "salinity": 35.0,
+      "ph_level": 7.9,
+      "dissolved_oxygen": 7.8,
+      "chlorophyll_concentration": 0.7,
+      "turbidity": 2.5,
+      "pollution_index": 30.0,
+      "data_source": "research_vessel"
+    },
+    {
+      "timestamp": "2024-01-15T11:00:00Z",
+      "latitude": 35.6900,
+      "longitude": 139.6650,
+      "sea_surface_temperature": 16.4,
+      "salinity": 34.9,
+      "ph_level": 7.8,
+      "dissolved_oxygen": 7.7,
+      "chlorophyll_concentration": 0.8,
+      "turbidity": 2.7,
+      "pollution_index": 32.0,
+      "data_source": "autonomous_glider"
+    },
+    {
+      "timestamp": "2024-01-15T12:00:00Z",
+      "latitude": 35.6950,
+      "longitude": 139.6700,
+      "sea_surface_temperature": 16.7,
+      "salinity": 34.8,
+      "ph_level": 7.7,
+      "dissolved_oxygen": 7.6,
+      "chlorophyll_concentration": 0.9,
+      "turbidity": 2.9,
+      "pollution_index": 35.0,
+      "data_source": "coastal_monitoring"
+    }
+  ],
+  "statistics": {
+    "total_records": 5,
+    "time_range": {
+      "start": "2024-01-15T08:00:00Z",
+      "end": "2024-01-15T12:00:00Z"
+    },
+    "geographical_bounds": {
+      "min_latitude": 35.6762,
+      "max_latitude": 35.6950,
+      "min_longitude": 139.6503,
+      "max_longitude": 139.6700
+    },
+    "parameter_ranges": {
+      "temperature": {
+        "min": 15.5,
+        "max": 16.7,
+        "mean": 16.1
+      },
+      "salinity": {
+        "min": 34.8,
+        "max": 35.2,
+        "mean": 35.0
+      },
+      "ph": {
+        "min": 7.7,
+        "max": 8.1,
+        "mean": 7.9
+      },
+      "dissolved_oxygen": {
+        "min": 7.6,
+        "max": 8.0,
+        "mean": 7.8
+      },
+      "pollution_index": {
+        "min": 25.0,
+        "max": 35.0,
+        "mean": 30.0
+      }
+    }
+  }
+}
