@@ -21,11 +21,11 @@
     }
   ],
   "env": {
-    "REACT_APP_API_URL": "@react_app_api_url"
+    "REACT_APP_API_URL": "https://oceangpt-platform.onrender.com"
   },
   "build": {
     "env": {
-      "REACT_APP_API_URL": "@react_app_api_url"
+      "REACT_APP_API_URL": "https://oceangpt-platform.onrender.com"
     }
   }
 }
