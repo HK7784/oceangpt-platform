@@ -151,8 +151,11 @@ const ChatPage = () => {
   };
 
   useEffect(() => {
+    const apiBase = (process.env.REACT_APP_API_URL || 'http://localhost:8080').replace(/\/+$/, '');
+    const sockJsUrl = `${apiBase}/api/ws`;
+
     const client = new Client({
-      webSocketFactory: () => new SockJS('http://localhost:8080/api/ws'),
+      webSocketFactory: () => new SockJS(sockJsUrl),
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
