@@ -17,7 +17,8 @@ import random
 from typing import Dict, List, Any, Optional
 
 # 模型路径配置
-MODEL_PATH = "E:/ideaIU/IntelliJ IDEA 2025.1.2/OceanGPT-Java-Deployment/target/mymodel"
+# 优先使用环境变量，否则使用默认云端路径
+MODEL_PATH = os.environ.get("MODEL_PATH", "/app/models")
 
 def create_mock_model():
     """
