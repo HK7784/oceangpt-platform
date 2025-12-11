@@ -97,65 +97,213 @@ public class ReportRequest {
     
     // 构造函数
     public ReportRequest() {}
-
-    // Getters and Setters
-    public Double getLatitude() { return latitude; }
-    public void setLatitude(Double latitude) { this.latitude = latitude; }
-    public Double getLongitude() { return longitude; }
-    public void setLongitude(Double longitude) { this.longitude = longitude; }
-    public Double getS2B2() { return s2B2; }
-    public void setS2B2(Double s2B2) { this.s2B2 = s2B2; }
-    public Double getS2B3() { return s2B3; }
-    public void setS2B3(Double s2B3) { this.s2B3 = s2B3; }
-    public Double getS2B4() { return s2B4; }
-    public void setS2B4(Double s2B4) { this.s2B4 = s2B4; }
-    public Double getS2B5() { return s2B5; }
-    public void setS2B5(Double s2B5) { this.s2B5 = s2B5; }
-    public Double getS2B6() { return s2B6; }
-    public void setS2B6(Double s2B6) { this.s2B6 = s2B6; }
-    public Double getS2B7() { return s2B7; }
-    public void setS2B7(Double s2B7) { this.s2B7 = s2B7; }
-    public Double getS2B8() { return s2B8; }
-    public void setS2B8(Double s2B8) { this.s2B8 = s2B8; }
-    public Double getS2B8A() { return s2B8A; }
-    public void setS2B8A(Double s2B8A) { this.s2B8A = s2B8A; }
-    public Double getS3Oa01() { return s3Oa01; }
-    public void setS3Oa01(Double s3Oa01) { this.s3Oa01 = s3Oa01; }
-    public Double getS3Oa02() { return s3Oa02; }
-    public void setS3Oa02(Double s3Oa02) { this.s3Oa02 = s3Oa02; }
-    public Double getS3Oa03() { return s3Oa03; }
-    public void setS3Oa03(Double s3Oa03) { this.s3Oa03 = s3Oa03; }
-    public Double getS3Oa04() { return s3Oa04; }
-    public void setS3Oa04(Double s3Oa04) { this.s3Oa04 = s3Oa04; }
-    public Double getS3Oa05() { return s3Oa05; }
-    public void setS3Oa05(Double s3Oa05) { this.s3Oa05 = s3Oa05; }
-    public Double getS3Oa06() { return s3Oa06; }
-    public void setS3Oa06(Double s3Oa06) { this.s3Oa06 = s3Oa06; }
-    public Double getS3Oa07() { return s3Oa07; }
-    public void setS3Oa07(Double s3Oa07) { this.s3Oa07 = s3Oa07; }
-    public Double getS3Oa08() { return s3Oa08; }
-    public void setS3Oa08(Double s3Oa08) { this.s3Oa08 = s3Oa08; }
-    public Double getChlNN() { return chlNN; }
-    public void setChlNN(Double chlNN) { this.chlNN = chlNN; }
-    public Double getTsmNN() { return tsmNN; }
-    public void setTsmNN(Double tsmNN) { this.tsmNN = tsmNN; }
-    public Double getChlorophyllConcentration() { return chlorophyllConcentration; }
-    public void setChlorophyllConcentration(Double chlorophyllConcentration) { this.chlorophyllConcentration = chlorophyllConcentration; }
-    public Double getTurbidity() { return turbidity; }
-    public void setTurbidity(Double turbidity) { this.turbidity = turbidity; }
-    public String getReportType() { return reportType; }
-    public void setReportType(String reportType) { this.reportType = reportType; }
-    public String getLanguage() { return language; }
-    public void setLanguage(String language) { this.language = language; }
     
+    public ReportRequest(Double latitude, Double longitude) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+    }
+    
+    // Getters and Setters
     public java.util.List<java.util.Map<String, Object>> getRagDocuments() {
         return ragDocuments;
     }
-    
+
     public void setRagDocuments(java.util.List<java.util.Map<String, Object>> ragDocuments) {
         this.ragDocuments = ragDocuments;
     }
 
+    public Double getLatitude() {
+        return latitude;
+    }
+    
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+    
+    public Double getLongitude() {
+        return longitude;
+    }
+    
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
+    }
+    
+    public Double getS2B2() {
+        return s2B2;
+    }
+    
+    public void setS2B2(Double s2B2) {
+        this.s2B2 = s2B2;
+    }
+    
+    public Double getS2B3() {
+        return s2B3;
+    }
+    
+    public void setS2B3(Double s2B3) {
+        this.s2B3 = s2B3;
+    }
+    
+    public Double getS2B4() {
+        return s2B4;
+    }
+    
+    public void setS2B4(Double s2B4) {
+        this.s2B4 = s2B4;
+    }
+    
+    public Double getS2B5() {
+        return s2B5;
+    }
+    
+    public void setS2B5(Double s2B5) {
+        this.s2B5 = s2B5;
+    }
+    
+    public Double getS2B6() {
+        return s2B6;
+    }
+    
+    public void setS2B6(Double s2B6) {
+        this.s2B6 = s2B6;
+    }
+    
+    public Double getS2B7() {
+        return s2B7;
+    }
+    
+    public void setS2B7(Double s2B7) {
+        this.s2B7 = s2B7;
+    }
+    
+    public Double getS2B8() {
+        return s2B8;
+    }
+    
+    public void setS2B8(Double s2B8) {
+        this.s2B8 = s2B8;
+    }
+    
+    public Double getS2B8A() {
+        return s2B8A;
+    }
+    
+    public void setS2B8A(Double s2B8A) {
+        this.s2B8A = s2B8A;
+    }
+    
+    public Double getS3Oa01() {
+        return s3Oa01;
+    }
+    
+    public void setS3Oa01(Double s3Oa01) {
+        this.s3Oa01 = s3Oa01;
+    }
+    
+    public Double getS3Oa02() {
+        return s3Oa02;
+    }
+    
+    public void setS3Oa02(Double s3Oa02) {
+        this.s3Oa02 = s3Oa02;
+    }
+    
+    public Double getS3Oa03() {
+        return s3Oa03;
+    }
+    
+    public void setS3Oa03(Double s3Oa03) {
+        this.s3Oa03 = s3Oa03;
+    }
+    
+    public Double getS3Oa04() {
+        return s3Oa04;
+    }
+    
+    public void setS3Oa04(Double s3Oa04) {
+        this.s3Oa04 = s3Oa04;
+    }
+    
+    public Double getS3Oa05() {
+        return s3Oa05;
+    }
+    
+    public void setS3Oa05(Double s3Oa05) {
+        this.s3Oa05 = s3Oa05;
+    }
+    
+    public Double getS3Oa06() {
+        return s3Oa06;
+    }
+    
+    public void setS3Oa06(Double s3Oa06) {
+        this.s3Oa06 = s3Oa06;
+    }
+    
+    public Double getS3Oa07() {
+        return s3Oa07;
+    }
+    
+    public void setS3Oa07(Double s3Oa07) {
+        this.s3Oa07 = s3Oa07;
+    }
+    
+    public Double getS3Oa08() {
+        return s3Oa08;
+    }
+    
+    public void setS3Oa08(Double s3Oa08) {
+        this.s3Oa08 = s3Oa08;
+    }
+    
+    public Double getChlNN() {
+        return chlNN;
+    }
+    
+    public void setChlNN(Double chlNN) {
+        this.chlNN = chlNN;
+    }
+    
+    public Double getTsmNN() {
+        return tsmNN;
+    }
+    
+    public void setTsmNN(Double tsmNN) {
+        this.tsmNN = tsmNN;
+    }
+    
+    public Double getChlorophyllConcentration() {
+        return chlorophyllConcentration;
+    }
+    
+    public void setChlorophyllConcentration(Double chlorophyllConcentration) {
+        this.chlorophyllConcentration = chlorophyllConcentration;
+    }
+    
+    public Double getTurbidity() {
+        return turbidity;
+    }
+    
+    public void setTurbidity(Double turbidity) {
+        this.turbidity = turbidity;
+    }
+    
+    public String getReportType() {
+        return reportType;
+    }
+    
+    public void setReportType(String reportType) {
+        this.reportType = reportType;
+    }
+    
+    public String getLanguage() {
+        return language;
+    }
+    
+    public void setLanguage(String language) {
+        this.language = language;
+    }
+    
     @Override
     public String toString() {
         return "ReportRequest{" +
