@@ -18,9 +18,15 @@ public class CacheConfig {
     /**
      * 主缓存管理器
      * 使用ConcurrentMapCacheManager进行内存缓存
+     * 当未配置Redis时生效
      */
     @Bean
     @Primary
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "spring.cache.type", 
+        havingValue = "simple", 
+        matchIfMissing = true
+    )
     public CacheManager cacheManager() {
         ConcurrentMapCacheManager cacheManager = new ConcurrentMapCacheManager();
         
