@@ -154,12 +154,13 @@ const ChatPage = () => {
 
   useEffect(() => {
     // 统一与 REST 相同的回退策略，确保线上可用
-    const rawApiBase = process.env.REACT_APP_API_URL || 'https://oceangpt-platform.onrender.com';
-    let apiBase = rawApiBase;
+    let apiBase = process.env.REACT_APP_API_URL || 'https://oceangpt-platform.onrender.com';
     while (apiBase.endsWith('/')) apiBase = apiBase.slice(0, -1);
+    // 防止双重 /api 路径 (如果环境变量中包含了 /api)
+    if (apiBase.endsWith('/api')) apiBase = apiBase.slice(0, -4);
+    
     const sockJsUrl = `${apiBase}/api/ws`;
 
-    // [CRITICAL FIX] 优化 SockJS 连接参数
     const client = new Client({
       webSocketFactory: () => new SockJS(sockJsUrl, null, {
         transports: ['websocket', 'xhr-streaming', 'xhr-polling']
@@ -511,55 +512,86 @@ const ChatPage = () => {
                               </Typography>
                             </Box>
                           </Grid>
-                          <Grid item xs={12}>
-                            <Box sx={{ textAlign: 'center', p: 1, border: '1px solid #e0e0e0', borderRadius: 1 }}>
-                              <Typography variant="body2" color="textSecondary">水质等级</Typography>
-                              <Typography 
-                                variant="h6" 
-                                sx={{ 
-                                  color: getQualityColor(message.predictionResult.quality)
-                                }}
-                              >
-                                {getQualityLabel(message.predictionResult.quality)}
+                          <Grid item xs={6}>
+                            <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'info.light', borderRadius: 1 }}>
+                              <Typography variant="body2" color="white">pH值</Typography>
+                              <Typography variant="h6" color="white">
+                                {message.predictionResult.ph?.toFixed(2)}
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={6}>
+                            <Box sx={{ 
+                              textAlign: 'center', 
+                              p: 1, 
+                              bgcolor: getQualityColor(message.predictionResult.waterQualityLevel || message.predictionResult.qualityLevel), 
+                              borderRadius: 1 
+                            }}>
+                              <Typography variant="body2" color="white">水质等级</Typography>
+                              <Typography variant="h6" color="white">
+                                {getQualityLabel(message.predictionResult.waterQualityLevel || message.predictionResult.qualityLevel || '三级')}
                               </Typography>
                             </Box>
                           </Grid>
                         </Grid>
+                        
+                        {message.predictionResult.confidence && (
+                          <Box sx={{ mt: 2, textAlign: 'center' }}>
+                            <Chip 
+                              label={`预测置信度: ${(message.predictionResult.confidence * 100).toFixed(1)}%`}
+                              color={message.predictionResult.confidence > 0.8 ? 'success' : 'warning'}
+                            />
+                          </Box>
+                        )}
                       </CardContent>
                     </Card>
                   )}
-
-                  {/* 地图显示提示 */}
-                  {message.mapData && !showMap && (
-                    <Box sx={{ mt: 1 }}>
-                      <Chip 
-                        icon={<MapIcon />}
-                        label="点击查看地图详情" 
-                        onClick={() => {
-                          setMapData(message.mapData);
-                          setShowMap(true);
-                        }}
-                        color="primary"
-                        variant="outlined"
-                      />
-                    </Box>
+                  
+                  {/* 卫星数据信息 */}
+                  {message.satelliteData && (
+                    <Accordion sx={{ mt: 1 }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="body2">卫星数据详情</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Grid container spacing={1}>
+                          <Grid item xs={6}>
+                            <Typography variant="caption" color="text.secondary">卫星来源</Typography>
+                            <Typography variant="body2">{message.satelliteData.source}</Typography>
+                          </Grid>
+                          <Grid item xs={6}>
+                            <Typography variant="caption" color="text.secondary">采集时间</Typography>
+                            <Typography variant="body2">{new Date(message.satelliteData.timestamp).toLocaleDateString()}</Typography>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <Typography variant="caption" color="text.secondary">覆盖区域</Typography>
+                            <Typography variant="body2">{message.satelliteData.region}</Typography>
+                          </Grid>
+                        </Grid>
+                      </AccordionDetails>
+                    </Accordion>
                   )}
+                  
+                  <Typography variant="caption" sx={{ display: 'block', mt: 1, textAlign: 'right', opacity: 0.7 }}>
+                    {formatTime(message.timestamp)}
+                  </Typography>
                 </Paper>
               </Box>
+              
+              {message.type === 'user' && (
+                <Avatar sx={{ bgcolor: 'secondary.main', width: 32, height: 32 }}>
+                  <UserIcon fontSize="small" />
+                </Avatar>
+              )}
             </Box>
           </Box>
         ))}
         <div ref={messagesEndRef} />
       </Paper>
 
-      {/* 地图对话框/区域 */}
+      {/* 地图显示区域 */}
       {showMap && mapData && mapData.length > 0 && (
-        <Paper elevation={3} sx={{ height: '300px', mb: 2, position: 'relative', overflow: 'hidden' }}>
-          <Box sx={{ position: 'absolute', top: 10, right: 10, zIndex: 1000 }}>
-             <IconButton onClick={() => setShowMap(false)} sx={{ bgcolor: 'white', '&:hover': { bgcolor: '#f5f5f5' } }}>
-               <ClearIcon />
-             </IconButton>
-          </Box>
+        <Paper elevation={1} sx={{ height: '300px', mb: 2, overflow: 'hidden' }}>
           <MapContainer 
             center={getMapCenter(mapData)} 
             zoom={getMapZoom(mapData)} 
@@ -577,11 +609,13 @@ const ChatPage = () => {
                 <Popup>
                   <Typography variant="subtitle2">{point.name || '监测点'}</Typography>
                   <Typography variant="body2">
-                    水质: <span style={{ color: getQualityColor(point.quality) }}>
-                      {getQualityLabel(point.quality)}
-                    </span>
+                    水质: {getQualityLabel(point.quality)}
                   </Typography>
-                  {point.value && <Typography variant="caption">数值: {point.value}</Typography>}
+                  {point.value && (
+                    <Typography variant="body2">
+                      数值: {point.value}
+                    </Typography>
+                  )}
                 </Popup>
               </Marker>
             ))}
@@ -590,52 +624,52 @@ const ChatPage = () => {
       )}
 
       {/* 输入区域 */}
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="输入您的问题，例如：预测青岛海域未来一周的水质..."
-          value={inputMessage}
-          onChange={(e) => setInputMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
-          disabled={isLoading}
-          inputRef={inputRef}
-          sx={{ bgcolor: 'white' }}
-        />
-        <IconButton 
-          color="primary" 
-          onClick={() => handleSendMessage()}
-          disabled={isLoading || !inputMessage.trim() || !isConnected}
-          sx={{ 
-            bgcolor: 'primary.main', 
-            color: 'white',
-            '&:hover': { bgcolor: 'primary.dark' },
-            '&.Mui-disabled': { bgcolor: 'action.disabledBackground' },
-            width: 56,
-            height: 56
-          }}
-        >
-          {isLoading ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
-        </IconButton>
-      </Box>
-      
-      {/* 建议问题 */}
-      {messages.length > 0 && messages[messages.length - 1].suggestions && (
-        <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          {messages[messages.length - 1].suggestions.map((suggestion, index) => (
-            <Chip
-              key={index}
-              label={suggestion}
-              onClick={() => handleSuggestionClick(suggestion)}
-              variant="outlined"
-              color="primary"
-              size="small"
-              disabled={isLoading || !isConnected}
-              sx={{ cursor: 'pointer' }}
-            />
-          ))}
+      <Paper elevation={1} sx={{ p: 2, mt: 'auto' }}>
+        {/* 建议问题 */}
+        {messages.length > 0 && messages[messages.length - 1].suggestions && (
+          <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {messages[messages.length - 1].suggestions.map((suggestion, index) => (
+              <Chip
+                key={index}
+                label={suggestion}
+                onClick={() => handleSuggestionClick(suggestion)}
+                variant="outlined"
+                color="primary"
+                size="small"
+                sx={{ cursor: 'pointer' }}
+              />
+            ))}
+          </Box>
+        )}
+
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <TextField
+            fullWidth
+            placeholder="输入您的问题，例如：分析青岛海域的水质情况..."
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={isLoading}
+            variant="outlined"
+            size="small"
+            multiline
+            maxRows={4}
+          />
+          <IconButton 
+            color="primary" 
+            onClick={() => handleSendMessage()}
+            disabled={!inputMessage.trim() || isLoading || !isConnected}
+            sx={{ 
+              bgcolor: 'primary.main', 
+              color: 'white',
+              '&:hover': { bgcolor: 'primary.dark' },
+              '&.Mui-disabled': { bgcolor: 'action.disabledBackground' }
+            }}
+          >
+            {isLoading ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
+          </IconButton>
         </Box>
-      )}
+      </Paper>
     </Box>
   );
 };
