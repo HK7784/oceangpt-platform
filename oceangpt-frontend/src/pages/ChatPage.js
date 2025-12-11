@@ -26,7 +26,7 @@ import {
   Assessment as AssessmentIcon,
   Map as MapIcon
 } from '@mui/icons-material';
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Rectangle } from 'react-leaflet';
 import L from 'leaflet';
 import '../styles/ChatPage.css';
 // import { chatWithOceanGPT, getChatHistory } from '../services/api';
@@ -106,7 +106,10 @@ const ChatPage = () => {
   };
 
   // 根据地图数据计算地图中心点
-  const getMapCenter = (mapData) => {
+  const getMapCenter = (mapData, spatialRange) => {
+    if (spatialRange) {
+      return [spatialRange.centerLat, spatialRange.centerLon];
+    }
     if (!mapData || mapData.length === 0) {
       return [36.0544, 120.3822]; // 默认青岛坐标
     }
@@ -124,7 +127,10 @@ const ChatPage = () => {
   };
 
   // 根据地图数据计算合适的缩放级别
-  const getMapZoom = (mapData) => {
+  const getMapZoom = (mapData, spatialRange) => {
+    if (spatialRange) {
+        return 13; // 0.01度约1km，适合Zoom 13-14
+    }
     if (!mapData || mapData.length === 0) {
       return 8; // 默认缩放级别
     }
@@ -209,12 +215,13 @@ const ChatPage = () => {
             predictionResult: receivedMessage.relatedData?.predictionResult,
             reportId: receivedMessage.relatedData?.reportId,
             satelliteData: receivedMessage.relatedData?.satelliteData,
-            mapData: receivedMessage.relatedData?.mapData
+            mapData: receivedMessage.relatedData?.mapData,
+            spatialRange: receivedMessage.relatedData?.additionalInfo?.spatialRange
           };
           
-          // 如果消息包含地图数据，显示地图
-          if (receivedMessage.relatedData?.mapData) {
-            setMapData(receivedMessage.relatedData.mapData);
+          // 如果消息包含地图数据或空间范围，显示地图
+          if (receivedMessage.relatedData?.mapData || receivedMessage.relatedData?.additionalInfo?.spatialRange) {
+            setMapData(receivedMessage.relatedData?.mapData || []);
             setShowMap(true);
           }
           
@@ -555,119 +562,324 @@ const ChatPage = () => {
                       </AccordionSummary>
                       <AccordionDetails>
                         <Grid container spacing={1}>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="text.secondary">卫星来源</Typography>
-                            <Typography variant="body2">{message.satelliteData.source}</Typography>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="text.secondary">采集时间</Typography>
-                            <Typography variant="body2">{new Date(message.satelliteData.timestamp).toLocaleDateString()}</Typography>
+                          <Grid item xs={12}>
+                            <Typography variant="body2">
+                              <strong>数据源:</strong> {message.satelliteData.dataSource}
+                            </Typography>
                           </Grid>
                           <Grid item xs={12}>
-                            <Typography variant="caption" color="text.secondary">覆盖区域</Typography>
-                            <Typography variant="body2">{message.satelliteData.region}</Typography>
+                            <Typography variant="body2">
+                              <strong>质量评分:</strong> {message.satelliteData.qualityScore?.toFixed(2)}
+                            </Typography>
                           </Grid>
+                          {message.satelliteData.chlNN && (
+                            <Grid item xs={6}>
+                              <Typography variant="body2">
+                                <strong>叶绿素:</strong> {message.satelliteData.chlNN.toFixed(3)} mg/m³
+                              </Typography>
+                            </Grid>
+                          )}
+                          {message.satelliteData.tsmNN && (
+                            <Grid item xs={6}>
+                              <Typography variant="body2">
+                                <strong>总悬浮物:</strong> {message.satelliteData.tsmNN.toFixed(3)} mg/L
+                              </Typography>
+                            </Grid>
+                          )}
                         </Grid>
                       </AccordionDetails>
                     </Accordion>
                   )}
                   
-                  <Typography variant="caption" sx={{ display: 'block', mt: 1, textAlign: 'right', opacity: 0.7 }}>
-                    {formatTime(message.timestamp)}
-                  </Typography>
+                  {/* 报告ID显示 */}
+                  {message.reportId && (
+                    <Box sx={{ mt: 1 }}>
+                      <Chip 
+                        size="small" 
+                        label={`报告ID: ${message.reportId}`}
+                        color="info"
+                        variant="outlined"
+                      />
+                    </Box>
+                  )}
+                  
+                  {/* 地图可视化 */}
+                  {(message.mapData && message.mapData.length > 0) || message.spatialRange ? (
+                    <Card sx={{ mt: 1, height: 400 }}>
+                      <CardContent sx={{ p: 1, height: '100%' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                          <MapIcon color="primary" sx={{ mr: 1 }} />
+                          <Typography variant="h6">地理位置可视化</Typography>
+                        </Box>
+                        <Box sx={{ height: 350, borderRadius: 1, overflow: 'hidden' }}>
+                          <MapContainer
+                            center={getMapCenter(message.mapData, message.spatialRange)}
+                            zoom={getMapZoom(message.mapData, message.spatialRange)}
+                            style={{ height: '100%', width: '100%' }}
+                          >
+                            <TileLayer
+                              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                            />
+                            {/* 渲染点位标记 */}
+                            {message.mapData && message.mapData.map((point, index) => (
+                               <React.Fragment key={index}>
+                                 <Marker position={[point.lat || point.latitude, point.lng || point.longitude]}>
+                                   <Popup>
+                                     <Box>
+                                       <Typography variant="subtitle2">{point.name || `监测点 ${index + 1}`}</Typography>
+                                       {point.details ? (
+                                         <Typography variant="body2" sx={{ whiteSpace: 'pre-line', mt: 1 }}>
+                                           {point.details}
+                                         </Typography>
+                                       ) : (
+                                         <>
+                                            {point.value && <Typography variant="body2">数值: {point.value}</Typography>}
+                                            {point.temperature && <Typography variant="body2">温度: {point.temperature}°C</Typography>}
+                                            {point.salinity && <Typography variant="body2">盐度: {point.salinity}</Typography>}
+                                            {point.ph && <Typography variant="body2">pH: {point.ph}</Typography>}
+                                            {point.dissolvedOxygen && <Typography variant="body2">溶解氧: {point.dissolvedOxygen} mg/L</Typography>}
+                                         </>
+                                       )}
+                                       {(point.quality || point.waterQualityLevel) && (
+                                       <Chip 
+                                         size="small" 
+                                         label={getQualityLabel(point.quality || point.waterQualityLevel)} 
+                                         sx={{ 
+                                           bgcolor: getQualityColor(point.quality || point.waterQualityLevel),
+                                           color: 'white',
+                                           mt: 1
+                                         }}
+                                       />
+                                       )}
+                                     </Box>
+                                   </Popup>
+                                 </Marker>
+                                 {(point.quality || point.waterQualityLevel) && (
+                                 <Circle
+                                   center={[point.lat || point.latitude, point.lng || point.longitude]}
+                                   radius={5000}
+                                   pathOptions={{
+                                     color: getQualityColor(point.quality || point.waterQualityLevel),
+                                     fillColor: getQualityColor(point.quality || point.waterQualityLevel),
+                                     fillOpacity: 0.2
+                                   }}
+                                 />
+                                 )}
+                               </React.Fragment>
+                            ))}
+                            
+                            {/* 渲染空间范围矩形 */}
+                            {message.spatialRange && (
+                              <Rectangle 
+                                bounds={[
+                                  [message.spatialRange.minLat, message.spatialRange.minLon],
+                                  [message.spatialRange.maxLat, message.spatialRange.maxLon]
+                                ]}
+                                pathOptions={{ color: '#1976d2', weight: 2, fillOpacity: 0.1, dashArray: '5, 5' }}
+                              >
+                                <Popup>
+                                  <Typography variant="subtitle2">0.01° 空间平均范围</Typography>
+                                  <Typography variant="caption" display="block">
+                                    中心: {message.spatialRange.centerLat?.toFixed(4)}, {message.spatialRange.centerLon?.toFixed(4)}
+                                  </Typography>
+                                  <Typography variant="caption" display="block">
+                                    说明: 该区域内的平均反演结果
+                                  </Typography>
+                                </Popup>
+                              </Rectangle>
+                            )}
+                          </MapContainer>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ) : null}
                 </Paper>
+                
+                {/* 建议问题 */}
+                {message.suggestions && message.suggestions.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium', color: 'primary.main' }}>
+                      💡 您可能还想了解：
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {message.suggestions.map((suggestion, index) => (
+                        <Chip
+                          key={index}
+                          label={suggestion}
+                          size="small"
+                          clickable
+                          onClick={() => handleSuggestionClick(suggestion)}
+                          sx={{
+                            backgroundColor: 'primary.light',
+                            color: 'white',
+                            border: '1px solid',
+                            borderColor: 'primary.main',
+                            transition: 'all 0.2s ease-in-out',
+                            '&:hover': {
+                              backgroundColor: 'primary.main',
+                              transform: 'scale(1.05)',
+                              boxShadow: 1,
+                            },
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+                
+                <Typography 
+                  variant="caption" 
+                  color="text.secondary" 
+                  sx={{ 
+                    display: 'block', 
+                    mt: 0.5, 
+                    textAlign: message.type === 'user' ? 'right' : 'left'
+                  }}
+                >
+                  {formatTime(message.timestamp)}
+                </Typography>
               </Box>
               
               {message.type === 'user' && (
-                <Avatar sx={{ bgcolor: 'secondary.main', width: 32, height: 32 }}>
+                <Avatar sx={{ bgcolor: 'grey.500', width: 32, height: 32 }}>
                   <UserIcon fontSize="small" />
                 </Avatar>
               )}
             </Box>
           </Box>
         ))}
+        
+        {/* 加载指示器 */}
+        {isLoading && (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 1 }}>
+            <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
+              <BotIcon fontSize="small" />
+            </Avatar>
+            <Paper 
+              elevation={1} 
+              sx={{ 
+                p: 2, 
+                borderRadius: '18px 18px 18px 4px',
+                backgroundColor: 'grey.50',
+                border: '1px solid',
+                borderColor: 'grey.200',
+                animation: 'pulse 1.5s ease-in-out infinite',
+                '@keyframes pulse': {
+                  '0%': {
+                    opacity: 1,
+                  },
+                  '50%': {
+                    opacity: 0.7,
+                  },
+                  '100%': {
+                    opacity: 1,
+                  },
+                },
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} color="primary" />
+                <Typography variant="body2" color="text.secondary">
+                  正在思考中...
+                </Typography>
+              </Box>
+            </Paper>
+          </Box>
+        )}
+        
         <div ref={messagesEndRef} />
       </Paper>
 
-      {/* 地图显示区域 */}
-      {showMap && mapData && mapData.length > 0 && (
-        <Paper elevation={1} sx={{ height: '300px', mb: 2, overflow: 'hidden' }}>
-          <MapContainer 
-            center={getMapCenter(mapData)} 
-            zoom={getMapZoom(mapData)} 
-            style={{ height: '100%', width: '100%' }}
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            />
-            {mapData.map((point, index) => (
-              <Marker 
-                key={index} 
-                position={[point.lat || point.latitude, point.lng || point.longitude]}
-              >
-                <Popup>
-                  <Typography variant="subtitle2">{point.name || '监测点'}</Typography>
-                  <Typography variant="body2">
-                    水质: {getQualityLabel(point.quality)}
-                  </Typography>
-                  {point.value && (
-                    <Typography variant="body2">
-                      数值: {point.value}
-                    </Typography>
-                  )}
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-        </Paper>
-      )}
-
-      {/* 输入区域 */}
-      <Paper elevation={1} sx={{ p: 2, mt: 'auto' }}>
-        {/* 建议问题 */}
-        {messages.length > 0 && messages[messages.length - 1].suggestions && (
-          <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            {messages[messages.length - 1].suggestions.map((suggestion, index) => (
-              <Chip
-                key={index}
-                label={suggestion}
-                onClick={() => handleSuggestionClick(suggestion)}
-                variant="outlined"
-                color="primary"
-                size="small"
-                sx={{ cursor: 'pointer' }}
-              />
-            ))}
-          </Box>
-        )}
-
-        <Box sx={{ display: 'flex', gap: 1 }}>
+      {/* 输入框 */}
+      <Paper elevation={1} sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
           <TextField
+            ref={inputRef}
             fullWidth
-            placeholder="输入您的问题，例如：分析青岛海域的水质情况..."
+            multiline
+            maxRows={4}
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            disabled={isLoading}
+            placeholder="请输入您的问题，例如：显示青岛海域监测点、预测水质变化、生成报告等..."
             variant="outlined"
             size="small"
-            multiline
-            maxRows={4}
+            disabled={isLoading}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '20px',
+                '&:hover': {
+                  borderColor: 'primary.main',
+                },
+                '&.Mui-focused': {
+                  borderColor: 'primary.main',
+                },
+              }
+            }}
           />
-          <IconButton 
-            color="primary" 
+          <IconButton
             onClick={() => handleSendMessage()}
-            disabled={!inputMessage.trim() || isLoading || !isConnected}
-            sx={{ 
-              bgcolor: 'primary.main', 
+            disabled={!inputMessage.trim() || isLoading}
+            color="primary"
+            aria-label="发送消息"
+            sx={{
+              bgcolor: 'primary.main',
               color: 'white',
-              '&:hover': { bgcolor: 'primary.dark' },
-              '&.Mui-disabled': { bgcolor: 'action.disabledBackground' }
+              minWidth: 48,
+              minHeight: 48,
+              '&:hover': {
+                bgcolor: 'primary.dark',
+                transform: 'scale(1.05)',
+                },
+              '&:disabled': {
+                bgcolor: 'grey.300'
+              },
+              transition: 'all 0.2s ease-in-out',
             }}
           >
-            {isLoading ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
+            {isLoading ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
           </IconButton>
+        </Box>
+        
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', textAlign: 'center' }}>
+          💬 支持自然语言交互 | 🎯 智能识别意图 | ⚡ 实时响应
+        </Typography>
+        
+        {/* 快捷功能按钮 */}
+        <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          <Chip
+            label="🗺️ 显示地图"
+            size="small"
+            variant="outlined"
+            clickable
+            onClick={() => handleSendMessage('显示青岛海域的监测点分布')}
+            sx={{ fontSize: '0.75rem' }}
+          />
+          <Chip
+            label="📊 水质预测"
+            size="small"
+            variant="outlined"
+            clickable
+            onClick={() => handleSendMessage('预测未来一周的水质变化')}
+            sx={{ fontSize: '0.75rem' }}
+          />
+          <Chip
+            label="📋 生成报告"
+            size="small"
+            variant="outlined"
+            clickable
+            onClick={() => handleSendMessage('生成当前海域水质报告')}
+            sx={{ fontSize: '0.75rem' }}
+          />
+          <Chip
+            label="📈 数据分析"
+            size="small"
+            variant="outlined"
+            clickable
+            onClick={() => handleSendMessage('分析DIN和SRP浓度趋势')}
+            sx={{ fontSize: '0.75rem' }}
+          />
         </Box>
       </Paper>
     </Box>
