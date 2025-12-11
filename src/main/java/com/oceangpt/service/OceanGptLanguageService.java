@@ -295,19 +295,73 @@ public class OceanGptLanguageService {
         return prompt.toString();
     }
     
-    // 备用方案方法 (省略，未变更)
+    // 备用方案方法
     private String generateFallbackExecutiveSummary(Map<String, Object> predictionData, 
                                                    double latitude, double longitude) {
-        return "水质状况总体平稳。"; // 简化示例
+        StringBuilder summary = new StringBuilder();
+        summary.append(String.format("基于卫星遥感数据，对目标海域（经度%.2f°，纬度%.2f°）的水质状况进行了分析。", 
+                                   longitude, latitude));
+        
+        if (predictionData.containsKey("DIN")) {
+            summary.append(String.format("溶解无机氮浓度为%s，", predictionData.get("DIN")));
+        }
+        if (predictionData.containsKey("SRP")) {
+            summary.append(String.format("可溶性活性磷浓度为%s，", predictionData.get("SRP")));
+        }
+        if (predictionData.containsKey("pH")) {
+            summary.append(String.format("pH值为%s。", predictionData.get("pH")));
+        }
+        
+        summary.append("总体而言，该海域水质状况需要持续监测，建议定期评估环境变化趋势。");
+        return summary.toString();
     }
-
+    
     private String generateFallbackDetailedAnalysis(Map<String, Object> predictionData,
-                                                  Map<String, Object> spectralData) {
-        return "暂无详细分析。";
+                                                   Map<String, Object> spectralData) {
+        StringBuilder analysis = new StringBuilder();
+        analysis.append("## 详细水质参数分析\n\n");
+        
+        for (Map.Entry<String, Object> entry : predictionData.entrySet()) {
+            analysis.append(String.format("### %s分析\n", entry.getKey()));
+            analysis.append(String.format("预测值：%s\n", entry.getValue()));
+            analysis.append("该参数在海洋环境监测中具有重要意义，需要结合其他指标综合评估。\n\n");
+        }
+        
+        return analysis.toString();
     }
-
+    
     private String generateFallbackRiskAssessment(Map<String, Object> predictionData,
-                                                Map<String, Object> environmentalFactors) {
-        return "风险等级：低。";
+                                                 Map<String, Object> environmentalFactors) {
+        StringBuilder risk = new StringBuilder();
+        risk.append("## 环境风险评估\n\n");
+        risk.append("### 营养盐污染风险\n");
+        risk.append("基于当前水质参数，营养盐污染风险处于可控范围，建议持续监测。\n\n");
+        risk.append("### 生态系统影响风险\n");
+        risk.append("当前水质状况对海洋生态系统的影响相对较小，但需要关注长期变化趋势。\n\n");
+        
+        return risk.toString();
+    }
+    
+    /**
+     * 检查vLLM服务状态
+     */
+    public boolean isVllmServiceAvailable() {
+        if (!vllmEnabled) {
+            return false;
+        }
+        
+        try {
+            URL url = new URL(vllmEndpoint.replace("/v1/completions", "/health"));
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+            
+            int responseCode = connection.getResponseCode();
+            return responseCode == HttpURLConnection.HTTP_OK;
+        } catch (Exception e) {
+            logger.debug("vLLM服务不可用: {}", e.getMessage());
+            return false;
+        }
     }
 }
