@@ -32,23 +32,12 @@ management:
         include: health,info
       base-path: /actuator
   
-cors:
-  allowed-origins: 
-    - https://oceangpt-frontend.vercel.app
-    - https://oceangpt-frontend.railway.app
-    - https://oceangpt-platform.vercel.app
-    - https://your-frontend-domain.com
-  allowed-methods:
-    - GET
-    - POST
-    - PUT
-    - DELETE
-    - OPTIONS
-  allowed-headers:
-    - "*"
-  allow-credentials: true
-
 oceangpt:
+  cors:
+    allowed-origins: "https://oceangpt-frontend.vercel.app,https://oceangpt-frontend.railway.app,https://oceangpt-platform.vercel.app,https://your-frontend-domain.com"
+    allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
+    allowed-headers: "*"
+    allow-credentials: true
   # 新增：在容器内设置Python可执行路径，默认指向/opt/venv
   python:
     executable: ${PYTHON_EXECUTABLE:/opt/venv/bin/python}
