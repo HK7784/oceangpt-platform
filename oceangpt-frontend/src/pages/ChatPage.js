@@ -151,11 +151,10 @@ const ChatPage = () => {
   };
 
   useEffect(() => {
-    const apiBase = (process.env.REACT_APP_API_URL || 'http://localhost:8080').replace(/\/+$/, '');
-    const sockJsUrl = `${apiBase}/api/ws`;
-
+    // 使用环境变量或默认值
+    const apiUrl = process.env.REACT_APP_API_URL || 'https://oceangpt-platform.onrender.com';
     const client = new Client({
-      webSocketFactory: () => new SockJS(sockJsUrl),
+      webSocketFactory: () => new SockJS(`${apiUrl}/api/ws`),
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
@@ -664,36 +663,6 @@ const ChatPage = () => {
                   </Box>
                 )}
                 
-                {/* 相关数据 - 已隐藏以简化界面 */}
-                {/* {message.relatedData && Object.keys(message.relatedData).length > 0 && (
-                  <Card sx={{ mt: 1, maxWidth: 300 }}>
-                    <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-                      <Typography variant="caption" color="text.secondary">
-                        相关数据:
-                      </Typography>
-                      {Object.entries(message.relatedData).map(([key, value]) => {
-                        // 安全地渲染不同类型的值
-                        let displayValue;
-                        if (typeof value === 'number') {
-                          displayValue = value.toFixed(2);
-                        } else if (typeof value === 'object' && value !== null) {
-                          displayValue = JSON.stringify(value);
-                        } else if (typeof value === 'string') {
-                          displayValue = value;
-                        } else {
-                          displayValue = String(value);
-                        }
-                        
-                        return (
-                          <Typography key={key} variant="body2" sx={{ fontSize: '0.75rem' }}>
-                            {key}: {displayValue}
-                          </Typography>
-                        );
-                      })}
-                    </CardContent>
-                  </Card>
-                )} */}
-                
                 <Typography 
                   variant="caption" 
                   color="text.secondary" 
@@ -797,9 +766,9 @@ const ChatPage = () => {
               '&:hover': {
                 bgcolor: 'primary.dark',
                 transform: 'scale(1.05)',
-              },
-              '&:disabled': {
-                bgcolor: 'grey.300'
+                '&:disabled': {
+                  bgcolor: 'grey.300'
+                }
               },
               transition: 'all 0.2s ease-in-out',
             }}
