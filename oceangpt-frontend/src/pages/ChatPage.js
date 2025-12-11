@@ -31,7 +31,7 @@ import L from 'leaflet';
 import '../styles/ChatPage.css';
 // import { chatWithOceanGPT, getChatHistory } from '../services/api';
 import { Client } from '@stomp/stompjs';
-// import SockJS from 'sockjs-client'; // 不再需要SockJS
+import SockJS from 'sockjs-client';
 
 const ChatPage = () => {
   const [messages, setMessages] = useState([
@@ -55,7 +55,9 @@ const ChatPage = () => {
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  // eslint-disable-next-line no-unused-vars
   const [showMap, setShowMap] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [mapData, setMapData] = useState([]);
 
   // 修复 Leaflet 默认图标问题
@@ -151,21 +153,27 @@ const ChatPage = () => {
   };
 
   useEffect(() => {
-    // 使用环境变量或默认值
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://oceangpt-platform.onrender.com';
-    
-    // 使用原生 WebSocket 避免 SockJS 的跨域 Cookie 问题
-    // 将 https:// 替换为 wss://，http:// 替换为 ws://
-    const wsUrl = apiUrl.replace('https://', 'wss://').replace('http://', 'ws://');
-    
+    // 统一与 REST 相同的回退策略，确保线上可用
+    const rawApiBase = process.env.REACT_APP_API_URL || 'https://oceangpt-platform.onrender.com';
+    let apiBase = rawApiBase;
+    while (apiBase.endsWith('/')) apiBase = apiBase.slice(0, -1);
+    const sockJsUrl = `${apiBase}/api/ws`;
+
+    // [CRITICAL FIX] 优化 SockJS 连接参数
     const client = new Client({
-      // 使用 brokerURL 连接原生 WebSocket 端点
-      brokerURL: `${wsUrl}/api/ws-connect`,
+      webSocketFactory: () => new SockJS(sockJsUrl, null, {
+        transports: ['websocket', 'xhr-streaming', 'xhr-polling']
+      }),
       reconnectDelay: 5000,
-      heartbeatIncoming: 4000,
-      heartbeatOutgoing: 4000,
+      heartbeatIncoming: 10000, // 增加心跳间隔
+      heartbeatOutgoing: 10000,
+      connectionTimeout: 60000, // 增加连接超时到60秒
       debug: function (str) {
         console.log('STOMP Debug: ' + str);
+      },
+      onStompError: (frame) => {
+        console.error('Broker reported error: ' + frame.headers['message']);
+        console.error('Additional details: ' + frame.body);
       }
     });
 
@@ -176,40 +184,45 @@ const ChatPage = () => {
       
       client.subscribe(`/topic/chat.${sessionId}`, (message) => {
         console.log('Received message:', message.body);
-        const receivedMessage = JSON.parse(message.body);
-        
-        // 确保content始终是字符串
-        let messageContent = receivedMessage.message;
-        if (typeof messageContent === 'object' && messageContent !== null) {
-          messageContent = JSON.stringify(messageContent, null, 2);
-        } else if (typeof messageContent !== 'string') {
-          messageContent = String(messageContent);
+        try {
+          const receivedMessage = JSON.parse(message.body);
+          
+          // 确保content始终是字符串
+          let messageContent = receivedMessage.message;
+          if (typeof messageContent === 'object' && messageContent !== null) {
+            messageContent = JSON.stringify(messageContent, null, 2);
+          } else if (typeof messageContent !== 'string') {
+            messageContent = String(messageContent);
+          }
+          
+          const botMessage = {
+            id: Date.now(),
+            type: 'bot',
+            content: messageContent,
+            timestamp: new Date(),
+            confidence: receivedMessage.confidence,
+            suggestions: receivedMessage.followUpQueries,
+            steps: receivedMessage.steps,
+            relatedData: receivedMessage.relatedData,
+            technicalDetails: receivedMessage.technicalDetails,
+            predictionResult: receivedMessage.relatedData?.predictionResult,
+            reportId: receivedMessage.relatedData?.reportId,
+            satelliteData: receivedMessage.relatedData?.satelliteData,
+            mapData: receivedMessage.relatedData?.mapData
+          };
+          
+          // 如果消息包含地图数据，显示地图
+          if (receivedMessage.relatedData?.mapData) {
+            setMapData(receivedMessage.relatedData.mapData);
+            setShowMap(true);
+          }
+          
+          setMessages(prev => [...prev, botMessage]);
+          setIsLoading(false);
+        } catch (error) {
+          console.error('Error parsing message:', error);
+          setIsLoading(false);
         }
-        
-        const botMessage = {
-          id: Date.now(),
-          type: 'bot',
-          content: messageContent,
-          timestamp: new Date(),
-          confidence: receivedMessage.confidence,
-          suggestions: receivedMessage.followUpQueries,
-          steps: receivedMessage.steps,
-          relatedData: receivedMessage.relatedData,
-          technicalDetails: receivedMessage.technicalDetails,
-          predictionResult: receivedMessage.relatedData?.predictionResult,
-          reportId: receivedMessage.relatedData?.reportId,
-          satelliteData: receivedMessage.relatedData?.satelliteData,
-          mapData: receivedMessage.relatedData?.mapData
-        };
-        
-        // 如果消息包含地图数据，显示地图
-        if (receivedMessage.relatedData?.mapData) {
-          setMapData(receivedMessage.relatedData.mapData);
-          setShowMap(true);
-        }
-        
-        setMessages(prev => [...prev, botMessage]);
-        setIsLoading(false);
       });
 
       client.publish({
@@ -225,10 +238,21 @@ const ChatPage = () => {
 
     client.onStompError = (frame) => {
       console.error('STOMP error:', frame);
+      setIsConnected(false);
+      // 显示错误消息给用户
+      const errorMessage = {
+        id: Date.now(),
+        type: 'bot',
+        content: '连接出现问题，正在尝试重新连接...',
+        timestamp: new Date(),
+        isError: true
+      };
+      setMessages(prev => [...prev, errorMessage]);
     };
 
     client.onWebSocketError = (event) => {
       console.error('WebSocket error:', event);
+      setIsConnected(false);
     };
 
     client.onDisconnect = () => {
@@ -487,295 +511,131 @@ const ChatPage = () => {
                               </Typography>
                             </Box>
                           </Grid>
-                          <Grid item xs={6}>
-                            <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'info.light', borderRadius: 1 }}>
-                              <Typography variant="body2" color="white">pH值</Typography>
-                              <Typography variant="h6" color="white">
-                                {message.predictionResult.ph?.toFixed(2)}
-                              </Typography>
-                            </Box>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Box sx={{ 
-                              textAlign: 'center', 
-                              p: 1, 
-                              bgcolor: getQualityColor(message.predictionResult.waterQualityLevel || message.predictionResult.qualityLevel), 
-                              borderRadius: 1 
-                            }}>
-                              <Typography variant="body2" color="white">水质等级</Typography>
-                              <Typography variant="h6" color="white">
-                                {getQualityLabel(message.predictionResult.waterQualityLevel || message.predictionResult.qualityLevel || '三级')}
+                          <Grid item xs={12}>
+                            <Box sx={{ textAlign: 'center', p: 1, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                              <Typography variant="body2" color="textSecondary">水质等级</Typography>
+                              <Typography 
+                                variant="h6" 
+                                sx={{ 
+                                  color: getQualityColor(message.predictionResult.quality)
+                                }}
+                              >
+                                {getQualityLabel(message.predictionResult.quality)}
                               </Typography>
                             </Box>
                           </Grid>
                         </Grid>
-                        
-                        {message.predictionResult.confidence && (
-                          <Box sx={{ mt: 2, textAlign: 'center' }}>
-                            <Chip 
-                              label={`预测置信度: ${(message.predictionResult.confidence * 100).toFixed(1)}%`}
-                              color={message.predictionResult.confidence > 0.8 ? 'success' : 'warning'}
-                            />
-                          </Box>
-                        )}
                       </CardContent>
                     </Card>
                   )}
-                  
-                  {/* 卫星数据信息 */}
-                  {message.satelliteData && (
-                    <Accordion sx={{ mt: 1 }}>
-                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                        <Typography variant="body2">卫星数据详情</Typography>
-                      </AccordionSummary>
-                      <AccordionDetails>
-                        <Grid container spacing={1}>
-                          <Grid item xs={12}>
-                            <Typography variant="body2">
-                              <strong>数据源:</strong> {message.satelliteData.dataSource}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12}>
-                            <Typography variant="body2">
-                              <strong>质量评分:</strong> {message.satelliteData.qualityScore?.toFixed(2)}
-                            </Typography>
-                          </Grid>
-                          {message.satelliteData.chlNN && (
-                            <Grid item xs={6}>
-                              <Typography variant="body2">
-                                <strong>叶绿素:</strong> {message.satelliteData.chlNN.toFixed(3)} mg/m³
-                              </Typography>
-                            </Grid>
-                          )}
-                          {message.satelliteData.kd490 && (
-                            <Grid item xs={6}>
-                              <Typography variant="body2">
-                                <strong>浑浊度:</strong> {message.satelliteData.kd490.toFixed(3)} m⁻¹
-                              </Typography>
-                            </Grid>
-                          )}
-                          {message.satelliteData.sst && (
-                            <Grid item xs={6}>
-                              <Typography variant="body2">
-                                <strong>海表温:</strong> {message.satelliteData.sst.toFixed(2)} °C
-                              </Typography>
-                            </Grid>
-                          )}
-                          {message.satelliteData.salinity && (
-                            <Grid item xs={6}>
-                              <Typography variant="body2">
-                                <strong>盐度:</strong> {message.satelliteData.salinity.toFixed(2)} PSU
-                              </Typography>
-                            </Grid>
-                          )}
-                        </Grid>
-                      </AccordionDetails>
-                    </Accordion>
-                  )}
-                  
-                  {/* 地图可视化 */}
-                  {message.mapData && message.mapData.length > 0 && (
-                    <Card sx={{ mt: 1, height: 400 }}>
-                      <CardContent sx={{ p: 1, height: '100%' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                          <MapIcon color="primary" sx={{ mr: 1 }} />
-                          <Typography variant="h6">地理位置可视化</Typography>
-                        </Box>
-                        <Box sx={{ height: 350, borderRadius: 1, overflow: 'hidden' }}>
-                          <MapContainer
-                            center={getMapCenter(message.mapData)}
-                            zoom={getMapZoom(message.mapData)}
-                            style={{ height: '100%', width: '100%' }}
-                          >
-                            <TileLayer
-                              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                            />
-                            {message.mapData.map((point, index) => (
-                              <React.Fragment key={index}>
-                                <Marker position={[point.latitude, point.longitude]}>
-                                  <Popup>
-                                    <Box>
-                                      <Typography variant="subtitle2">{point.name}</Typography>
-                                      {point.details ? (
-                                        <Typography variant="body2" sx={{ whiteSpace: 'pre-line', mt: 1 }}>
-                                          {point.details}
-                                        </Typography>
-                                      ) : (
-                                        <>
-                                          <Typography variant="body2">温度: {point.temperature}°C</Typography>
-                                          <Typography variant="body2">盐度: {point.salinity}</Typography>
-                                          <Typography variant="body2">pH: {point.ph}</Typography>
-                                          <Typography variant="body2">溶解氧: {point.dissolvedOxygen} mg/L</Typography>
-                                        </>
-                                      )}
-                                      <Chip 
-                                        size="small" 
-                                        label={getQualityLabel(point.quality || point.waterQualityLevel)} 
-                                        sx={{ 
-                                          bgcolor: getQualityColor(point.quality || point.waterQualityLevel),
-                                          color: 'white',
-                                          mt: 1
-                                        }}
-                                      />
-                                    </Box>
-                                  </Popup>
-                                </Marker>
-                                <Circle
-                                  center={[point.latitude, point.longitude]}
-                                  radius={5000}
-                                  pathOptions={{
-                                    color: getQualityColor(point.quality || point.waterQualityLevel),
-                                    fillColor: getQualityColor(point.quality || point.waterQualityLevel),
-                                    fillOpacity: 0.2
-                                  }}
-                                />
-                              </React.Fragment>
-                            ))}
-                          </MapContainer>
-                        </Box>
-                      </CardContent>
-                    </Card>
+
+                  {/* 地图显示提示 */}
+                  {message.mapData && !showMap && (
+                    <Box sx={{ mt: 1 }}>
+                      <Chip 
+                        icon={<MapIcon />}
+                        label="点击查看地图详情" 
+                        onClick={() => {
+                          setMapData(message.mapData);
+                          setShowMap(true);
+                        }}
+                        color="primary"
+                        variant="outlined"
+                      />
+                    </Box>
                   )}
                 </Paper>
-                
-                {/* 建议问题 */}
-                {message.suggestions && message.suggestions.length > 0 && (
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="body2" sx={{ mb: 1, fontWeight: 'medium', color: 'primary.main' }}>
-                      💡 您可能还想了解：
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {message.suggestions.map((suggestion, index) => (
-                        <Chip
-                          key={index}
-                          label={suggestion}
-                          size="small"
-                          clickable
-                          onClick={() => handleSuggestionClick(suggestion)}
-                          sx={{
-                            backgroundColor: 'primary.light',
-                            color: 'white',
-                            border: '1px solid',
-                            borderColor: 'primary.main',
-                            transition: 'all 0.2s ease-in-out',
-                            '&:hover': {
-                              backgroundColor: 'primary.main',
-                              transform: 'scale(1.05)',
-                              boxShadow: 1,
-                            },
-                          }}
-                        />
-                      ))}
-                    </Box>
-                  </Box>
-                )}
-                
-                <Typography 
-                  variant="caption" 
-                  color="text.secondary" 
-                  sx={{ 
-                    display: 'block', 
-                    mt: 0.5, 
-                    textAlign: message.type === 'user' ? 'right' : 'left'
-                  }}
-                >
-                  {formatTime(message.timestamp)}
-                </Typography>
               </Box>
-              
-              {message.type === 'user' && (
-                <Avatar sx={{ bgcolor: 'grey.500', width: 32, height: 32 }}>
-                  <UserIcon fontSize="small" />
-                </Avatar>
-              )}
             </Box>
           </Box>
         ))}
-        
-        {/* 加载指示器 */}
-        {isLoading && (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 1 }}>
-            <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
-              <BotIcon fontSize="small" />
-            </Avatar>
-            <Paper 
-              elevation={1} 
-              sx={{ 
-                p: 2, 
-                borderRadius: '18px 18px 18px 4px',
-                backgroundColor: 'grey.50',
-                border: '1px solid',
-                borderColor: 'grey.200',
-                animation: 'pulse 1.5s ease-in-out infinite',
-                '@keyframes pulse': {
-                  '0%': {
-                    opacity: 1,
-                  },
-                  '50%': {
-                    opacity: 0.7,
-                  },
-                  '100%': {
-                    opacity: 1,
-                  },
-                },
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CircularProgress size={16} color="primary" />
-                <Typography variant="body2" color="text.secondary">
-                  正在思考中...
-                </Typography>
-              </Box>
-            </Paper>
-          </Box>
-        )}
-        
         <div ref={messagesEndRef} />
       </Paper>
 
-      {/* 输入框区域 */}
-      <Paper elevation={3} sx={{ p: 2, backgroundColor: 'white' }}>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <TextField
-            fullWidth
-            placeholder="请输入您的问题，例如：分析青岛海域的水质情况..."
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={isLoading || !isConnected}
-            variant="outlined"
-            size="medium"
-            inputRef={inputRef}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                backgroundColor: 'grey.50',
-              }
-            }}
-          />
-          <IconButton 
-            color="primary" 
-            onClick={() => handleSendMessage()} 
-            disabled={!inputMessage.trim() || isLoading || !isConnected}
-            sx={{ 
-              bgcolor: 'primary.main', 
-              color: 'white',
-              width: 56,
-              height: 56,
-              '&:hover': {
-                bgcolor: 'primary.dark',
-              },
-              '&.Mui-disabled': {
-                bgcolor: 'grey.300',
-                color: 'grey.500'
-              }
-            }}
+      {/* 地图对话框/区域 */}
+      {showMap && mapData && mapData.length > 0 && (
+        <Paper elevation={3} sx={{ height: '300px', mb: 2, position: 'relative', overflow: 'hidden' }}>
+          <Box sx={{ position: 'absolute', top: 10, right: 10, zIndex: 1000 }}>
+             <IconButton onClick={() => setShowMap(false)} sx={{ bgcolor: 'white', '&:hover': { bgcolor: '#f5f5f5' } }}>
+               <ClearIcon />
+             </IconButton>
+          </Box>
+          <MapContainer 
+            center={getMapCenter(mapData)} 
+            zoom={getMapZoom(mapData)} 
+            style={{ height: '100%', width: '100%' }}
           >
-            {isLoading ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
-          </IconButton>
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            />
+            {mapData.map((point, index) => (
+              <Marker 
+                key={index} 
+                position={[point.lat || point.latitude, point.lng || point.longitude]}
+              >
+                <Popup>
+                  <Typography variant="subtitle2">{point.name || '监测点'}</Typography>
+                  <Typography variant="body2">
+                    水质: <span style={{ color: getQualityColor(point.quality) }}>
+                      {getQualityLabel(point.quality)}
+                    </span>
+                  </Typography>
+                  {point.value && <Typography variant="caption">数值: {point.value}</Typography>}
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
+        </Paper>
+      )}
+
+      {/* 输入区域 */}
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <TextField
+          fullWidth
+          variant="outlined"
+          placeholder="输入您的问题，例如：预测青岛海域未来一周的水质..."
+          value={inputMessage}
+          onChange={(e) => setInputMessage(e.target.value)}
+          onKeyPress={handleKeyPress}
+          disabled={isLoading}
+          inputRef={inputRef}
+          sx={{ bgcolor: 'white' }}
+        />
+        <IconButton 
+          color="primary" 
+          onClick={() => handleSendMessage()}
+          disabled={isLoading || !inputMessage.trim() || !isConnected}
+          sx={{ 
+            bgcolor: 'primary.main', 
+            color: 'white',
+            '&:hover': { bgcolor: 'primary.dark' },
+            '&.Mui-disabled': { bgcolor: 'action.disabledBackground' },
+            width: 56,
+            height: 56
+          }}
+        >
+          {isLoading ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
+        </IconButton>
+      </Box>
+      
+      {/* 建议问题 */}
+      {messages.length > 0 && messages[messages.length - 1].suggestions && (
+        <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+          {messages[messages.length - 1].suggestions.map((suggestion, index) => (
+            <Chip
+              key={index}
+              label={suggestion}
+              onClick={() => handleSuggestionClick(suggestion)}
+              variant="outlined"
+              color="primary"
+              size="small"
+              disabled={isLoading || !isConnected}
+              sx={{ cursor: 'pointer' }}
+            />
+          ))}
         </Box>
-      </Paper>
+      )}
     </Box>
   );
 };
