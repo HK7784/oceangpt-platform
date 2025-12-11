@@ -1,8 +1,6 @@
 package com.oceangpt.config;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -13,18 +11,6 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
-
-    @Value("${oceangpt.cors.allowed-origins}")
-    private String[] allowedOrigins;
-
-    @Value("${oceangpt.cors.allowed-methods}")
-    private String[] allowedMethods;
-
-    @Value("${oceangpt.cors.allowed-headers}")
-    private String[] allowedHeaders;
-
-    @Value("${oceangpt.cors.allow-credentials}")
-    private boolean allowCredentials;
     
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
@@ -53,12 +39,14 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addViewController("/").setViewName("forward:/index.html");
     }
 
+    // [CRITICAL FIX] 添加全局 CORS 配置，确保所有端点允许 Vercel 访问
     @Override
-    public void addCorsMappings(CorsRegistry registry) {
+    public void addCorsMappings(org.springframework.web.servlet.config.annotation.CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOriginPatterns(allowedOrigins)
-                .allowedMethods(allowedMethods)
-                .allowedHeaders(allowedHeaders)
-                .allowCredentials(allowCredentials);
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600);
     }
 }
