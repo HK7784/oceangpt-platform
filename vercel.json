@@ -1,24 +1,11 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "oceangpt-frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "build"
-      }
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
-  ],
-  "routes": [
-    { "handle": "filesystem" },
-    { "src": "/.*", "dest": "/index.html" }
   ],
   "env": {
     "REACT_APP_API_URL": "https://oceangpt-platform.onrender.com"
-  },
-  "build": {
-    "env": {
-      "REACT_APP_API_URL": "https://oceangpt-platform.onrender.com"
-    }
   }
 }
