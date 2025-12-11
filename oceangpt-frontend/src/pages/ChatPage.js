@@ -31,7 +31,7 @@ import L from 'leaflet';
 import '../styles/ChatPage.css';
 // import { chatWithOceanGPT, getChatHistory } from '../services/api';
 import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
+// import SockJS from 'sockjs-client'; // 不再需要SockJS
 
 const ChatPage = () => {
   const [messages, setMessages] = useState([
@@ -153,8 +153,14 @@ const ChatPage = () => {
   useEffect(() => {
     // 使用环境变量或默认值
     const apiUrl = process.env.REACT_APP_API_URL || 'https://oceangpt-platform.onrender.com';
+    
+    // 使用原生 WebSocket 避免 SockJS 的跨域 Cookie 问题
+    // 将 https:// 替换为 wss://，http:// 替换为 ws://
+    const wsUrl = apiUrl.replace('https://', 'wss://').replace('http://', 'ws://');
+    
     const client = new Client({
-      webSocketFactory: () => new SockJS(`${apiUrl}/api/ws`),
+      // 使用 brokerURL 连接原生 WebSocket 端点
+      brokerURL: `${wsUrl}/api/ws-connect`,
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
@@ -541,28 +547,30 @@ const ChatPage = () => {
                               </Typography>
                             </Grid>
                           )}
-                          {message.satelliteData.tsmNN && (
+                          {message.satelliteData.kd490 && (
                             <Grid item xs={6}>
                               <Typography variant="body2">
-                                <strong>总悬浮物:</strong> {message.satelliteData.tsmNN.toFixed(3)} mg/L
+                                <strong>浑浊度:</strong> {message.satelliteData.kd490.toFixed(3)} m⁻¹
+                              </Typography>
+                            </Grid>
+                          )}
+                          {message.satelliteData.sst && (
+                            <Grid item xs={6}>
+                              <Typography variant="body2">
+                                <strong>海表温:</strong> {message.satelliteData.sst.toFixed(2)} °C
+                              </Typography>
+                            </Grid>
+                          )}
+                          {message.satelliteData.salinity && (
+                            <Grid item xs={6}>
+                              <Typography variant="body2">
+                                <strong>盐度:</strong> {message.satelliteData.salinity.toFixed(2)} PSU
                               </Typography>
                             </Grid>
                           )}
                         </Grid>
                       </AccordionDetails>
                     </Accordion>
-                  )}
-                  
-                  {/* 报告ID显示 */}
-                  {message.reportId && (
-                    <Box sx={{ mt: 1 }}>
-                      <Chip 
-                        size="small" 
-                        label={`报告ID: ${message.reportId}`}
-                        color="info"
-                        variant="outlined"
-                      />
-                    </Box>
                   )}
                   
                   {/* 地图可视化 */}
@@ -726,95 +734,46 @@ const ChatPage = () => {
         <div ref={messagesEndRef} />
       </Paper>
 
-      {/* 输入框 */}
-      <Paper elevation={1} sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
+      {/* 输入框区域 */}
+      <Paper elevation={3} sx={{ p: 2, backgroundColor: 'white' }}>
+        <Box sx={{ display: 'flex', gap: 1 }}>
           <TextField
-            ref={inputRef}
             fullWidth
-            multiline
-            maxRows={4}
+            placeholder="请输入您的问题，例如：分析青岛海域的水质情况..."
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="请输入您的问题，例如：显示青岛海域监测点、预测水质变化、生成报告等..."
+            disabled={isLoading || !isConnected}
             variant="outlined"
-            size="small"
-            disabled={isLoading}
+            size="medium"
+            inputRef={inputRef}
             sx={{
               '& .MuiOutlinedInput-root': {
-                borderRadius: '20px',
-                '&:hover': {
-                  borderColor: 'primary.main',
-                },
-                '&.Mui-focused': {
-                  borderColor: 'primary.main',
-                },
+                borderRadius: 2,
+                backgroundColor: 'grey.50',
               }
             }}
           />
-          <IconButton
-            onClick={() => handleSendMessage()}
-            disabled={!inputMessage.trim() || isLoading}
-            color="primary"
-            aria-label="发送消息"
-            sx={{
-              bgcolor: 'primary.main',
+          <IconButton 
+            color="primary" 
+            onClick={() => handleSendMessage()} 
+            disabled={!inputMessage.trim() || isLoading || !isConnected}
+            sx={{ 
+              bgcolor: 'primary.main', 
               color: 'white',
-              minWidth: 48,
-              minHeight: 48,
+              width: 56,
+              height: 56,
               '&:hover': {
                 bgcolor: 'primary.dark',
-                transform: 'scale(1.05)',
-                '&:disabled': {
-                  bgcolor: 'grey.300'
-                }
               },
-              transition: 'all 0.2s ease-in-out',
+              '&.Mui-disabled': {
+                bgcolor: 'grey.300',
+                color: 'grey.500'
+              }
             }}
           >
-            {isLoading ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+            {isLoading ? <CircularProgress size={24} color="inherit" /> : <SendIcon />}
           </IconButton>
-        </Box>
-        
-        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', textAlign: 'center' }}>
-          💬 支持自然语言交互 | 🎯 智能识别意图 | ⚡ 实时响应
-        </Typography>
-        
-        {/* 快捷功能按钮 */}
-        <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          <Chip
-            label="🗺️ 显示地图"
-            size="small"
-            variant="outlined"
-            clickable
-            onClick={() => handleSendMessage('显示青岛海域的监测点分布')}
-            sx={{ fontSize: '0.75rem' }}
-          />
-          <Chip
-            label="📊 水质预测"
-            size="small"
-            variant="outlined"
-            clickable
-            onClick={() => handleSendMessage('预测未来一周的水质变化')}
-            sx={{ fontSize: '0.75rem' }}
-          />
-          <Chip
-            label="📋 生成报告"
-            size="small"
-            variant="outlined"
-            clickable
-            onClick={() => handleSendMessage('生成当前海域水质报告')}
-            sx={{ fontSize: '0.75rem' }}
-          />
-          <Chip
-            label="📈 数据分析"
-            size="small"
-            variant="outlined"
-            clickable
-            onClick={() => handleSendMessage('分析DIN和SRP浓度趋势')}
-            sx={{ fontSize: '0.75rem' }}
-          />
         </Box>
       </Paper>
     </Box>
