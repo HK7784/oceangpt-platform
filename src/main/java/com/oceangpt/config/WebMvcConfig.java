@@ -1,6 +1,8 @@
 package com.oceangpt.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -11,6 +13,18 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
+
+    @Value("${oceangpt.cors.allowed-origins}")
+    private String[] allowedOrigins;
+
+    @Value("${oceangpt.cors.allowed-methods}")
+    private String[] allowedMethods;
+
+    @Value("${oceangpt.cors.allowed-headers}")
+    private String[] allowedHeaders;
+
+    @Value("${oceangpt.cors.allow-credentials}")
+    private boolean allowCredentials;
     
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
@@ -37,5 +51,14 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addViewControllers(ViewControllerRegistry registry) {
         // 配置根路径重定向到index.html
         registry.addViewController("/").setViewName("forward:/index.html");
+    }
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**")
+                .allowedOriginPatterns(allowedOrigins)
+                .allowedMethods(allowedMethods)
+                .allowedHeaders(allowedHeaders)
+                .allowCredentials(allowCredentials);
     }
 }
