@@ -213,12 +213,6 @@ public class ApplicationStartupRunner implements CommandLineRunner {
             systemReady = false;
         }
         
-        // 检查数据库连接
-        // 这里可以添加数据库连接检查逻辑
-        
-        // 检查外部API连接
-        // 这里可以添加NOAA API连接检查逻辑
-        
         if (systemReady) {
             logger.info("✅ 系统就绪检查通过");
         } else {
@@ -274,31 +268,5 @@ public class ApplicationStartupRunner implements CommandLineRunner {
                    modelConfig.getBatchSize(),
                    modelConfig.getMaxSequenceLength(),
                    modelConfig.getInferenceThreads());
-    }
-    
-    /**
-     * 创建示例模型文件（用于演示）
-     */
-    private void createSampleModelFile() {
-        try {
-            String modelPath = modelConfig.getModelPath();
-            if (modelPath != null && !modelPath.trim().isEmpty()) {
-                Path path = Paths.get(modelPath);
-                Path parentDir = path.getParent();
-                
-                if (parentDir != null && !Files.exists(parentDir)) {
-                    Files.createDirectories(parentDir);
-                }
-                
-                if (!Files.exists(path)) {
-                    // 创建一个空的示例文件
-                    Files.createFile(path);
-                    logger.info("创建示例模型文件: {}", modelPath);
-                    logger.warn("这是一个空的示例文件，请替换为实际的OceanGPT模型文件");
-                }
-            }
-        } catch (Exception e) {
-            logger.error("创建示例模型文件失败: {}", e.getMessage());
-        }
     }
 }
