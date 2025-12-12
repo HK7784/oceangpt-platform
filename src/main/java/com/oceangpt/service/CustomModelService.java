@@ -80,7 +80,7 @@ public class CustomModelService {
             PredictionResponse response = buildResponse(result, request);
             
             long processingTime = System.currentTimeMillis() - startTime;
-            response.setProcessingTimeMs((int) processingTime);
+            response.setProcessingTimeMs(processingTime);
             
             logger.info("预测完成，耗时: {}ms", processingTime);
             return response;
