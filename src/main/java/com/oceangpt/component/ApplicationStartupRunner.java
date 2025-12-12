@@ -266,9 +266,9 @@ public class ApplicationStartupRunner implements CommandLineRunner {
                    "最大序列长度: {}\n" +
                    "推理线程数: {}\n" +
                    "系统状态: 运行中\n" +
-                   "API端点: http://localhost:8080/api/v1\n" +
-                   "健康检查: http://localhost:8080/api/v1/actuator/health\n" +
-                   "API文档: http://localhost:8080/api/v1/swagger-ui.html\n" +
+                   "API端点: http://localhost:8080/api\n" +
+                   "健康检查: http://localhost:8080/api/actuator/health\n" +
+                   "API文档: http://localhost:8080/api/swagger-ui/index.html\n" +
                    "==============================",
                    modelConfig.getModelPath(),
                    modelConfig.getBatchSize(),
