@@ -237,14 +237,46 @@ public class ReportResponse {
         this.processingTimeMs = processingTimeMs;
     }
 
+    // 新增方法：为了解决 "cannot find symbol: method getContent()"
+    public String getContent() {
+        if (detailedAnalysis != null && !detailedAnalysis.isEmpty()) {
+            return detailedAnalysis;
+        }
+        if (executiveSummary != null && !executiveSummary.isEmpty()) {
+            return executiveSummary;
+        }
+        return message;
+    }
+
+    // 新增方法：为了解决 "cannot find symbol: method setGeneratedAt(LocalDateTime)"
+    public void setGeneratedAt(LocalDateTime generatedAt) {
+        this.reportTimestamp = generatedAt;
+    }
+
     @Override
     public String toString() {
-        return "ReportResponse{" +
-                "success=" + success +
-                ", reportId='" + reportId + '\'' +
-                ", title='" + title + '\'' +
-                ", waterQualityGrade='" + waterQualityGrade + '\'' +
-                ", processingTimeMs=" + processingTimeMs +
-                '}';
+        StringBuilder sb = new StringBuilder();
+        if (title != null) sb.append("# ").append(title).append("\n\n");
+        if (executiveSummary != null) sb.append("## 摘要\n").append(executiveSummary).append("\n\n");
+        
+        if (waterQualityGrade != null || waterQualityCondition != null) {
+            sb.append("## 水质状况\n");
+            if (waterQualityGrade != null) sb.append("- **等级**: ").append(waterQualityGrade).append("\n");
+            if (waterQualityCondition != null) sb.append("- **状况**: ").append(waterQualityCondition).append("\n");
+            if (primaryPollutants != null) sb.append("- **主要污染物**: ").append(primaryPollutants).append("\n");
+            sb.append("\n");
+        }
+        
+        if (detailedAnalysis != null) sb.append("## 详细分析\n").append(detailedAnalysis).append("\n\n");
+        if (spatialTemporalAnalysis != null) sb.append("## 时空分析\n").append(spatialTemporalAnalysis).append("\n\n");
+        if (environmentalImpact != null) sb.append("## 环境影响\n").append(environmentalImpact).append("\n\n");
+        if (recommendations != null) sb.append("## 建议措施\n").append(recommendations).append("\n\n");
+        
+        if (additionalInfo != null && !additionalInfo.isEmpty()) {
+            sb.append("## 附加信息\n");
+            additionalInfo.forEach((k, v) -> sb.append("- ").append(k).append(": ").append(v).append("\n"));
+        }
+        
+        return sb.toString();
     }
 }
