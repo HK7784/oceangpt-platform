@@ -101,6 +101,24 @@ public class ReportResponse {
         this.message = message;
     }
 
+    public String getContent() {
+        if (detailedAnalysis != null && !detailedAnalysis.isEmpty()) {
+            return detailedAnalysis;
+        }
+        if (executiveSummary != null && !executiveSummary.isEmpty()) {
+            return executiveSummary;
+        }
+        return message;
+    }
+
+    public LocalDateTime getGeneratedAt() {
+        return reportTimestamp;
+    }
+
+    public void setGeneratedAt(LocalDateTime generatedAt) {
+        this.reportTimestamp = generatedAt;
+    }
+
     public String getReportId() {
         return reportId;
     }
@@ -235,22 +253,6 @@ public class ReportResponse {
 
     public void setProcessingTimeMs(Integer processingTimeMs) {
         this.processingTimeMs = processingTimeMs;
-    }
-
-    // 新增方法：为了解决 "cannot find symbol: method getContent()"
-    public String getContent() {
-        if (detailedAnalysis != null && !detailedAnalysis.isEmpty()) {
-            return detailedAnalysis;
-        }
-        if (executiveSummary != null && !executiveSummary.isEmpty()) {
-            return executiveSummary;
-        }
-        return message;
-    }
-
-    // 新增方法：为了解决 "cannot find symbol: method setGeneratedAt(LocalDateTime)"
-    public void setGeneratedAt(LocalDateTime generatedAt) {
-        this.reportTimestamp = generatedAt;
     }
 
     @Override
