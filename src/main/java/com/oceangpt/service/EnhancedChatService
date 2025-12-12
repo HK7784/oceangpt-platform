@@ -453,109 +453,72 @@ public class EnhancedChatService {
     
     private boolean isSystemStatusQuery(String message) {
         String lowerMessage = message.toLowerCase();
-        return lowerMessage.contains("状态") || lowerMessage.contains("系统") || lowerMessage.contains("健康");
+        return lowerMessage.contains("状态") || lowerMessage.contains("健康") || lowerMessage.contains("运行");
     }
     
     private double[] extractCoordinates(String message) {
-        // 尝试括号格式 (lat, lon)
-        Matcher bracketMatcher = BRACKET_COORDINATE_PATTERN.matcher(message);
-        if (bracketMatcher.find()) {
-            try {
-                double lat = Double.parseDouble(bracketMatcher.group(1));
-                double lon = Double.parseDouble(bracketMatcher.group(2));
-                if (isValidCoordinate(lat, lon)) {
-                    return new double[]{lat, lon};
-                }
-            } catch (NumberFormatException e) {
-                // 继续尝试其他格式
-            }
-        }
-        
-        // 尝试标准格式
+        // 尝试匹配 "纬度: 39.1, 经度: 117.2" 格式
         Matcher matcher = COORDINATE_PATTERN.matcher(message);
         if (matcher.find()) {
             try {
                 double lat = Double.parseDouble(matcher.group(1));
                 double lon = Double.parseDouble(matcher.group(2));
-                if (isValidCoordinate(lat, lon)) {
-                    return new double[]{lat, lon};
-                }
+                return new double[]{lat, lon};
             } catch (NumberFormatException e) {
-                // 坐标格式错误
+                // 忽略解析错误
+            }
+        }
+        
+        // 尝试匹配 "(39.1, 117.2)" 格式
+        matcher = BRACKET_COORDINATE_PATTERN.matcher(message);
+        if (matcher.find()) {
+            try {
+                double lat = Double.parseDouble(matcher.group(1));
+                double lon = Double.parseDouble(matcher.group(2));
+                return new double[]{lat, lon};
+            } catch (NumberFormatException e) {
+                // 忽略解析错误
             }
         }
         
         return null;
     }
     
-    private boolean isValidCoordinate(double lat, double lon) {
-        return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
-    }
-    
     private LocalDateTime extractDateTime(String message) {
-        // 简化实现，返回当前时间
-        // 可以扩展以支持更复杂的时间解析
+        // 简单实现：暂时只支持当前时间
+        // 未来可以添加对 "昨天"、"2023-01-01" 等时间描述的解析
         return LocalDateTime.now();
     }
     
     private String extractReportId(String message) {
-        Pattern reportIdPattern = Pattern.compile("(RPT-\\d{8}-\\d{3}|[A-Z0-9]{8,})", Pattern.CASE_INSENSITIVE);
-        Matcher matcher = reportIdPattern.matcher(message);
+        // 简单提取，假设报告ID以 RPT- 开头
+        Pattern pattern = Pattern.compile("RPT-[\\w-]+");
+        Matcher matcher = pattern.matcher(message);
         if (matcher.find()) {
-            return matcher.group(1);
+            return matcher.group();
         }
         return null;
     }
     
-    private void saveMessage(String sessionId, String message, String userId, String messageType) {
-        try {
-            ChatMessage chatMessage = new ChatMessage();
-            chatMessage.setSessionId(sessionId);
-            chatMessage.setMessage(message);
-            chatMessage.setUserId(userId);
-            chatMessage.setMessageType(messageType);
-            chatMessage.setTimestamp(LocalDateTime.now());
-            chatMessageRepository.save(chatMessage);
-        } catch (Exception e) {
-            logger.error("保存消息失败: {}", e.getMessage(), e);
-        }
-    }
-    
-    private ChatResponse createErrorResponse(String errorMessage) {
+    private ChatResponse createErrorResponse(String message) {
         ChatResponse response = new ChatResponse();
         response.setSuccess(false);
-        response.setMessage("❌ " + errorMessage);
+        response.setErrorMessage(message);
+        response.setMessage("⚠️ " + message);
         return response;
     }
     
-    /**
-     * 消息意图类
-     */
-    private static class MessageIntent {
-        public enum IntentType {
-            WATER_QUALITY_PREDICTION,
-            REPORT_REQUEST,
-            DATA_INQUIRY,
-            SYSTEM_STATUS,
-            GENERAL_CHAT
+    private void saveMessage(String sessionId, String content, String senderId, String senderType) {
+        try {
+            ChatMessage chatMessage = new ChatMessage();
+            chatMessage.setSessionId(sessionId);
+            chatMessage.setContent(content);
+            chatMessage.setSenderId(senderId);
+            chatMessage.setSenderType(senderType);
+            chatMessage.setTimestamp(LocalDateTime.now());
+            chatMessageRepository.save(chatMessage);
+        } catch (Exception e) {
+            logger.error("保存消息失败", e);
         }
-        
-        private IntentType type;
-        private double[] coordinates;
-        private LocalDateTime dateTime;
-        private String reportId;
-        
-        // Getters and Setters
-        public IntentType getType() { return type; }
-        public void setType(IntentType type) { this.type = type; }
-        
-        public double[] getCoordinates() { return coordinates; }
-        public void setCoordinates(double[] coordinates) { this.coordinates = coordinates; }
-        
-        public LocalDateTime getDateTime() { return dateTime; }
-        public void setDateTime(LocalDateTime dateTime) { this.dateTime = dateTime; }
-        
-        public String getReportId() { return reportId; }
-        public void setReportId(String reportId) { this.reportId = reportId; }
     }
 }
