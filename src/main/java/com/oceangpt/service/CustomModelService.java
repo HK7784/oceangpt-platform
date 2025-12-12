@@ -9,21 +9,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.Files;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -96,16 +96,65 @@ public class CustomModelService {
      * 将单次预测结果映射为多目标Map格式
      */
     public Map<String, PredictionResponse> predictMultipleTargets(PredictionRequest request) {
+        // 调用主预测方法
         PredictionResponse response = predictWaterQuality(request);
+        
         Map<String, PredictionResponse> predictions = new HashMap<>();
         
-        // 将同一个响应对象映射到不同指标键，供ReportGenerationService使用
-        // ReportGenerationService会分别调用 getDinLevel(), getSrpLevel() 等
-        predictions.put("DIN", response);
-        predictions.put("SRP", response);
-        predictions.put("pH", response);
+        // 这里的逻辑是：一次预测包含了所有指标（DIN, SRP, pH）
+        // 我们将同一个响应对象（或其副本）映射到不同的键
+        // 这样 ReportGenerationService 可以通过 get("DIN") 获取包含 DIN 数据的响应
+        
+        // 1. DIN 预测
+        PredictionResponse dinResp = copyResponse(response);
+        // 如果主响应成功且包含DIN，则该子响应有效
+        if (response.isSuccess() && response.getDinLevel() != null) {
+            dinResp.setSuccess(true);
+            dinResp.setWaterQualityLevel(determineWaterQualityLevel(response.getDinLevel(), "DIN"));
+        }
+        predictions.put("DIN", dinResp);
+        
+        // 2. SRP 预测
+        PredictionResponse srpResp = copyResponse(response);
+        if (response.isSuccess() && response.getSrpLevel() != null) {
+            srpResp.setSuccess(true);
+            srpResp.setWaterQualityLevel(determineWaterQualityLevel(response.getSrpLevel(), "SRP"));
+        }
+        predictions.put("SRP", srpResp);
+        
+        // 3. pH 预测
+        PredictionResponse phResp = copyResponse(response);
+        if (response.isSuccess() && response.getPhLevel() != null) {
+            phResp.setSuccess(true);
+            phResp.setWaterQualityLevel(determineWaterQualityLevel(response.getPhLevel(), "pH"));
+        }
+        predictions.put("pH", phResp);
         
         return predictions;
+    }
+    
+    private PredictionResponse copyResponse(PredictionResponse original) {
+        PredictionResponse copy = new PredictionResponse();
+        copy.setSuccess(original.isSuccess());
+        copy.setErrorMessage(original.getErrorMessage());
+        copy.setLatitude(original.getLatitude());
+        copy.setLongitude(original.getLongitude());
+        copy.setPredictionTimestamp(original.getPredictionTimestamp());
+        copy.setProcessingTimeMs(original.getProcessingTimeMs());
+        copy.setConfidence(original.getConfidence());
+        copy.setModelVersion(original.getModelVersion());
+        copy.setDinLevel(original.getDinLevel());
+        copy.setDinUnit(original.getDinUnit());
+        copy.setSrpLevel(original.getSrpLevel());
+        copy.setSrpUnit(original.getSrpUnit());
+        copy.setPhLevel(original.getPhLevel());
+        copy.setPhUnit(original.getPhUnit());
+        copy.setChlLevel(original.getChlLevel());
+        copy.setChlUnit(original.getChlUnit());
+        copy.setWaterQualityLevel(original.getWaterQualityLevel());
+        copy.setQualityLevel(original.getQualityLevel());
+        copy.setAdditionalInfo(original.getAdditionalInfo());
+        return copy;
     }
     
     /**
@@ -264,6 +313,7 @@ public class CustomModelService {
                 throw new RuntimeException("解析模型输出失败: " + e.getMessage());
             }
         } finally {
+            // 可以在这里清理临时文件，但为了性能通常保留
         }
     }
 
