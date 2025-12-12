@@ -2,90 +2,77 @@ package com.oceangpt.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
-
 import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * 水质预测响应DTO
- * 用于返回预测结果给客户端
+ * 预测响应DTO
  */
-@Schema(description = "水质预测响应结果")
+@Schema(description = "水质预测响应")
 public class PredictionResponse {
     
-    @Schema(description = "请求是否成功", example = "true")
-    @JsonProperty("success")
-    private boolean success;
-    
-    @Schema(description = "错误信息", example = "")
-    @JsonProperty("errorMessage")
-    private String errorMessage;
-    
-    @Schema(description = "纬度", example = "39.9042")
-    @JsonProperty("latitude")
-    private Double latitude;
-    
-    @Schema(description = "经度", example = "116.4074")
-    @JsonProperty("longitude")
-    private Double longitude;
-    
-    @Schema(description = "DIN浓度预测值 (mg/L)", example = "0.05")
-    @JsonProperty("dinLevel")
-    private Double dinLevel;
-    
-    @Schema(description = "DIN单位", example = "mg/L")
-    @JsonProperty("dinUnit")
-    private String dinUnit;
-    
-    @Schema(description = "SRP浓度预测值 (mg/L)", example = "0.02")
-    @JsonProperty("srpLevel")
-    private Double srpLevel;
-    
-    @Schema(description = "SRP单位", example = "mg/L")
-    @JsonProperty("srpUnit")
-    private String srpUnit;
-    
-    @Schema(description = "pH值预测", example = "8.1")
-    @JsonProperty("phLevel")
-    private Double phLevel;
-    
-    @Schema(description = "pH单位", example = "")
-    @JsonProperty("phUnit")
-    private String phUnit;
-    
-    @Schema(description = "水质等级", example = "良好")
-    @JsonProperty("waterQualityLevel")
-    private String waterQualityLevel;
-    
-    @Schema(description = "营养盐浓度预测值", example = "0.5")
+    @Schema(description = "营养盐浓度 (DIN)", example = "0.45")
     @JsonProperty("nutrient")
     private Double nutrient;
     
-    @Schema(description = "pH值预测", example = "7.8")
+    @Schema(description = "pH值", example = "8.1")
     @JsonProperty("ph")
     private Double ph;
     
-    @Schema(description = "预测置信度", example = "0.95")
+    @Schema(description = "置信度", example = "0.85")
     @JsonProperty("confidence")
     private Double confidence;
     
-    @Schema(description = "海表温度预测", example = "15.2")
+    @Schema(description = "错误信息")
+    @JsonProperty("errorMessage")
+    private String errorMessage;
+    
+    @Schema(description = "预测结果是否成功")
+    @JsonProperty("success")
+    private boolean success = true;
+
+    // 新增字段
+    @Schema(description = "海表温度", example = "25.4")
     @JsonProperty("seaSurfaceTemperature")
     private Double seaSurfaceTemperature;
-    
-    @Schema(description = "盐度预测", example = "35.1")
+
+    @Schema(description = "盐度", example = "34.5")
     @JsonProperty("salinity")
     private Double salinity;
-    
-    @Schema(description = "溶解氧预测", example = "8.2")
+
+    @Schema(description = "溶解氧", example = "6.5")
     @JsonProperty("dissolvedOxygen")
     private Double dissolvedOxygen;
-    
-    @Schema(description = "叶绿素浓度预测", example = "0.6")
+
+    @Schema(description = "叶绿素浓度", example = "1.2")
     @JsonProperty("chlorophyllConcentration")
     private Double chlorophyllConcentration;
     
-    @Schema(description = "污染指数", example = "0.3")
+    @Schema(description = "DIN浓度", example = "0.15")
+    @JsonProperty("dinLevel")
+    private Double dinLevel;
+    
+    @Schema(description = "SRP浓度", example = "0.02")
+    @JsonProperty("srpLevel")
+    private Double srpLevel;
+    
+    @Schema(description = "pH预测值", example = "8.15")
+    @JsonProperty("phLevel")
+    private Double phLevel;
+    
+    @Schema(description = "经度", example = "120.5")
+    @JsonProperty("longitude")
+    private Double longitude;
+    
+    @Schema(description = "纬度", example = "30.5")
+    @JsonProperty("latitude")
+    private Double latitude;
+    
+    @Schema(description = "水质类别", example = "I类")
+    @JsonProperty("waterQualityLevel")
+    private String waterQualityLevel;
+    
+    @Schema(description = "污染指数", example = "0.35")
     @JsonProperty("pollutionIndex")
     private Double pollutionIndex;
     
@@ -100,6 +87,11 @@ public class PredictionResponse {
     @Schema(description = "模型版本", example = "v1.0")
     @JsonProperty("modelVersion")
     private String modelVersion;
+
+    // 新增方法：为了解决 "cannot find symbol: method getChlLevel()"
+    public Double getChlLevel() {
+        return chlorophyllConcentration;
+    }
     
     @Schema(description = "处理时间（毫秒）", example = "150")
     @JsonProperty("processingTimeMs")
@@ -222,167 +214,107 @@ public class PredictionResponse {
         this.qualityLevel = qualityLevel;
     }
     
-    public LocalDateTime getPredictionTimestamp() {
-        return predictionTimestamp;
-    }
-    
-    public void setPredictionTimestamp(LocalDateTime predictionTimestamp) {
-        this.predictionTimestamp = predictionTimestamp;
-    }
-    
-    public String getModelVersion() {
-        return modelVersion;
-    }
-    
-    public void setModelVersion(String modelVersion) {
-        this.modelVersion = modelVersion;
-    }
-    
-    public Long getProcessingTimeMs() {
-        return processingTimeMs;
-    }
-    
-    public void setProcessingTimeMs(Long processingTimeMs) {
-        this.processingTimeMs = processingTimeMs;
-    }
-    
-    public Map<String, Object> getAdditionalInfo() {
-        return additionalInfo;
-    }
-    
-    public void setAdditionalInfo(Map<String, Object> additionalInfo) {
-        this.additionalInfo = additionalInfo;
-    }
-    
-    public String[] getWarnings() {
-        return warnings;
-    }
-    
-    public void setWarnings(String[] warnings) {
-        this.warnings = warnings;
-    }
-    
-    // 新增的getter和setter方法
-    public boolean isSuccess() {
-        return success;
-    }
-    
-    public void setSuccess(boolean success) {
-        this.success = success;
-    }
-    
     public String getErrorMessage() {
         return errorMessage;
     }
-    
+
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
     }
-    
-    public Double getLatitude() {
-        return latitude;
+
+    public boolean isSuccess() {
+        return success;
     }
-    
-    public void setLatitude(Double latitude) {
-        this.latitude = latitude;
+
+    public void setSuccess(boolean success) {
+        this.success = success;
     }
-    
-    public Double getLongitude() {
-        return longitude;
-    }
-    
-    public void setLongitude(Double longitude) {
-        this.longitude = longitude;
-    }
-    
+
     public Double getDinLevel() {
         return dinLevel;
     }
-    
+
     public void setDinLevel(Double dinLevel) {
         this.dinLevel = dinLevel;
     }
-    
-    public String getDinUnit() {
-        return dinUnit;
-    }
-    
-    public void setDinUnit(String dinUnit) {
-        this.dinUnit = dinUnit;
-    }
-    
+
     public Double getSrpLevel() {
         return srpLevel;
     }
-    
+
     public void setSrpLevel(Double srpLevel) {
         this.srpLevel = srpLevel;
     }
-    
-    public String getSrpUnit() {
-        return srpUnit;
-    }
-    
-    public void setSrpUnit(String srpUnit) {
-        this.srpUnit = srpUnit;
-    }
-    
+
     public Double getPhLevel() {
         return phLevel;
     }
-    
+
     public void setPhLevel(Double phLevel) {
         this.phLevel = phLevel;
     }
-    
-    public String getPhUnit() {
-        return phUnit;
+
+    public Double getLongitude() {
+        return longitude;
     }
-    
-    public void setPhUnit(String phUnit) {
-        this.phUnit = phUnit;
+
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
     }
-    
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+
     public String getWaterQualityLevel() {
         return waterQualityLevel;
     }
-    
+
     public void setWaterQualityLevel(String waterQualityLevel) {
         this.waterQualityLevel = waterQualityLevel;
     }
-    
-    public void setProcessingTimeMs(int processingTimeMs) {
-        this.processingTimeMs = (long) processingTimeMs;
+
+    public LocalDateTime getPredictionTimestamp() {
+        return predictionTimestamp;
     }
-    
-    @Override
-    public String toString() {
-        return "PredictionResponse{" +
-                "success=" + success +
-                ", errorMessage='" + errorMessage + '\'' +
-                ", latitude=" + latitude +
-                ", longitude=" + longitude +
-                ", dinLevel=" + dinLevel +
-                ", dinUnit='" + dinUnit + '\'' +
-                ", srpLevel=" + srpLevel +
-                ", srpUnit='" + srpUnit + '\'' +
-                ", phLevel=" + phLevel +
-                ", phUnit='" + phUnit + '\'' +
-                ", waterQualityLevel='" + waterQualityLevel + '\'' +
-                ", nutrient=" + nutrient +
-                ", ph=" + ph +
-                ", confidence=" + confidence +
-                ", seaSurfaceTemperature=" + seaSurfaceTemperature +
-                ", salinity=" + salinity +
-                ", dissolvedOxygen=" + dissolvedOxygen +
-                ", chlorophyllConcentration=" + chlorophyllConcentration +
-                ", pollutionIndex=" + pollutionIndex +
-                ", qualityLevel='" + qualityLevel + '\'' +
-                ", predictionTimestamp=" + predictionTimestamp +
-                ", modelVersion='" + modelVersion + '\'' +
-                ", processingTimeMs=" + processingTimeMs +
-                ", additionalInfo=" + additionalInfo +
-                ", warnings=" + java.util.Arrays.toString(warnings) +
-                '}';
+
+    public void setPredictionTimestamp(LocalDateTime predictionTimestamp) {
+        this.predictionTimestamp = predictionTimestamp;
+    }
+
+    public String getModelVersion() {
+        return modelVersion;
+    }
+
+    public void setModelVersion(String modelVersion) {
+        this.modelVersion = modelVersion;
+    }
+
+    public Long getProcessingTimeMs() {
+        return processingTimeMs;
+    }
+
+    public void setProcessingTimeMs(Long processingTimeMs) {
+        this.processingTimeMs = processingTimeMs;
+    }
+
+    public Map<String, Object> getAdditionalInfo() {
+        return additionalInfo;
+    }
+
+    public void setAdditionalInfo(Map<String, Object> additionalInfo) {
+        this.additionalInfo = additionalInfo;
+    }
+
+    public String[] getWarnings() {
+        return warnings;
+    }
+
+    public void setWarnings(String[] warnings) {
+        this.warnings = warnings;
     }
 }
