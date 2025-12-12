@@ -67,6 +67,16 @@ public class ReportResponse {
     @Schema(description = "额外信息")
     private Map<String, Object> additionalInfo;
 
+    @Schema(description = "处理时间(ms)")
+    private Integer processingTimeMs;
+
+    public ReportResponse() {
+    }
+
+    public ReportResponse(boolean success) {
+        this.success = success;
+    }
+
     public boolean isSuccess() {
         return success;
     }
@@ -218,31 +228,23 @@ public class ReportResponse {
     public void setAdditionalInfo(Map<String, Object> additionalInfo) {
         this.additionalInfo = additionalInfo;
     }
-    
+
+    public Integer getProcessingTimeMs() {
+        return processingTimeMs;
+    }
+
+    public void setProcessingTimeMs(Integer processingTimeMs) {
+        this.processingTimeMs = processingTimeMs;
+    }
+
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        if (title != null) sb.append("# ").append(title).append("\n\n");
-        if (executiveSummary != null) sb.append("## 摘要\n").append(executiveSummary).append("\n\n");
-        
-        if (waterQualityGrade != null || waterQualityCondition != null) {
-            sb.append("## 水质状况\n");
-            if (waterQualityGrade != null) sb.append("- **等级**: ").append(waterQualityGrade).append("\n");
-            if (waterQualityCondition != null) sb.append("- **状况**: ").append(waterQualityCondition).append("\n");
-            if (primaryPollutants != null) sb.append("- **主要污染物**: ").append(primaryPollutants).append("\n");
-            sb.append("\n");
-        }
-        
-        if (detailedAnalysis != null) sb.append("## 详细分析\n").append(detailedAnalysis).append("\n\n");
-        if (spatialTemporalAnalysis != null) sb.append("## 时空分析\n").append(spatialTemporalAnalysis).append("\n\n");
-        if (environmentalImpact != null) sb.append("## 环境影响\n").append(environmentalImpact).append("\n\n");
-        if (recommendations != null) sb.append("## 建议措施\n").append(recommendations).append("\n\n");
-        
-        if (additionalInfo != null && !additionalInfo.isEmpty()) {
-            sb.append("## 附加信息\n");
-            additionalInfo.forEach((k, v) -> sb.append("- ").append(k).append(": ").append(v).append("\n"));
-        }
-        
-        return sb.toString();
+        return "ReportResponse{" +
+                "success=" + success +
+                ", reportId='" + reportId + '\'' +
+                ", title='" + title + '\'' +
+                ", waterQualityGrade='" + waterQualityGrade + '\'' +
+                ", processingTimeMs=" + processingTimeMs +
+                '}';
     }
 }
