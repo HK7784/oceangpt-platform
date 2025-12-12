@@ -2,6 +2,10 @@ package com.oceangpt.agent;
 
 import com.oceangpt.dto.ChatRequest;
 import com.oceangpt.dto.ChatResponse;
+import com.oceangpt.dto.PredictionRequest;
+import com.oceangpt.dto.PredictionResponse;
+import com.oceangpt.dto.ReportRequest;
+import com.oceangpt.dto.ReportResponse;
 import com.oceangpt.service.CustomModelService;
 import com.oceangpt.service.RagService;
 import com.oceangpt.service.ReportGenerationService;
@@ -45,7 +49,7 @@ public class AgentOrchestrator {
     /**
      * 处理用户请求
      */
-    public ChatResponse process(ChatRequest request) {
+    public ChatResponse run(ChatRequest request) {
         String sessionId = request.getSessionId();
         String message = request.getMessage();
         
@@ -72,6 +76,12 @@ public class AgentOrchestrator {
             Map<String, Object> baseInput = new HashMap<>();
             baseInput.put("query", message);
             baseInput.put("sessionId", sessionId);
+            
+            // 提取地理位置信息
+            if (request.getLocation() != null) {
+                baseInput.put("latitude", request.getLocation().getLatitude());
+                baseInput.put("longitude", request.getLocation().getLongitude());
+            }
 
             // 2. 工具调用链
             
@@ -81,7 +91,7 @@ public class AgentOrchestrator {
                 Map<String, Object> ragOut = safeInvoke(new RagTool(ragService), Map.of("query", message));
                 Object docsObj = ragOut.get("docs");
                 if (docsObj instanceof List) {
-                   response.addData("ragDocuments", docsObj);
+                   addData(response, "ragDocuments", docsObj);
                 }
             }
 
@@ -89,42 +99,47 @@ public class AgentOrchestrator {
             if (needPrediction) {
                 steps.add("调用水质预测模型");
                 Map<String, Object> predOut = safeInvoke(new PredictTool(customModelService), baseInput);
-                response.addData("predictions", predOut.get("predictions"));
+                addData(response, "predictions", predOut.get("predictions"));
             }
 
             // 报表生成
             if (needReport) {
                 steps.add("生成水质分析报表");
                 Map<String, Object> reportOut = safeInvoke(new ReportTool(reportService), baseInput);
-                response.addData("reportUrl", reportOut.get("reportUrl"));
-                response.addData("reportData", reportOut.get("reportData"));
+                addData(response, "reportUrl", reportOut.get("reportUrl"));
+                addData(response, "reportData", reportOut.get("reportData"));
             }
 
             // 3. 最终回复生成 (这里简单拼接，实际可用 LLM 润色)
             String finalReply = "收到您的指令：" + message + "\n" +
                     "已执行步骤：" + steps.toString();
-            response.setReply(finalReply);
+            response.setMessage(finalReply);
             
             // 记录回复
-            sessionHistory.get(sessionId).add("Assistant: " + finalReply);
+            if (sessionHistory.containsKey(sessionId)) {
+                sessionHistory.get(sessionId).add("Assistant: " + finalReply);
+            }
 
         } catch (Exception e) {
             logger.error("Agent处理异常", e);
-            response.setReply("抱歉，处理您的请求时发生错误: " + e.getMessage());
+            response.setMessage("抱歉，处理您的请求时发生错误: " + e.getMessage());
         }
 
         return response;
     }
 
     private boolean checkNeedRag(String msg) {
+        if (msg == null) return false;
         return msg.contains("查询") || msg.contains("资料") || msg.contains("知识") || msg.contains("什么");
     }
 
     private boolean checkNeedPrediction(String msg) {
+        if (msg == null) return false;
         return msg.contains("预测") || msg.contains("趋势") || msg.contains("未来");
     }
 
     private boolean checkNeedReport(String msg) {
+        if (msg == null) return false;
         return msg.contains("报表") || msg.contains("报告") || msg.contains("导出");
     }
 
@@ -139,8 +154,15 @@ public class AgentOrchestrator {
             return Map.of("error", e.getMessage());
         }
     }
+    
+    private void addData(ChatResponse response, String key, Object value) {
+        if (response.getRelatedData() == null) {
+            response.setRelatedData(new HashMap<>());
+        }
+        response.getRelatedData().put(key, value);
+    }
 
-    // --- 内部简单工具类定义 ---
+    // --- 内部简单工具类定义 (也可以拆分为独立类) ---
 
     interface AgentTool {
         Map<String, Object> execute(Map<String, Object> input);
@@ -162,8 +184,21 @@ public class AgentOrchestrator {
         public PredictTool(CustomModelService service) { this.service = service; }
         @Override
         public Map<String, Object> execute(Map<String, Object> input) {
-            var pred = service.predictWaterQuality(10.0, 50.0, 20.0, 7.5, 6.0, 0.05, 0.01, 8.0);
-            return Map.of("predictions", pred);
+            // 构造预测请求对象
+            PredictionRequest req = new PredictionRequest();
+            // 从输入中提取经纬度，若没有则使用默认值或抛出异常
+            // 注意：这里需要根据实际业务逻辑决定默认值，这里暂用0.0防止空指针
+            Double lat = (Double) input.getOrDefault("latitude", 0.0);
+            Double lon = (Double) input.getOrDefault("longitude", 0.0);
+            
+            req.setLatitude(lat);
+            req.setLongitude(lon);
+            req.setTimestamp(System.currentTimeMillis());
+            
+            // 调用新版服务接口
+            PredictionResponse result = service.predictWaterQuality(req);
+            
+            return Map.of("predictions", result);
         }
     }
 
@@ -172,7 +207,18 @@ public class AgentOrchestrator {
         public ReportTool(ReportGenerationService service) { this.service = service; }
         @Override
         public Map<String, Object> execute(Map<String, Object> input) {
-            var report = service.generateReport();
+            // 构造报告请求对象
+            ReportRequest req = new ReportRequest();
+            Double lat = (Double) input.getOrDefault("latitude", 0.0);
+            Double lon = (Double) input.getOrDefault("longitude", 0.0);
+            
+            req.setLatitude(lat);
+            req.setLongitude(lon);
+            req.setReportType("WATER_QUALITY");
+            
+            // 调用新版服务接口
+            ReportResponse report = service.generateWaterQualityReport(req);
+            
             return Map.of("reportUrl", "/api/reports/" + report.getReportId(), "reportData", report);
         }
     }
