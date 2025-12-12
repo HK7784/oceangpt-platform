@@ -1,15 +1,10 @@
 # 生产环境配置
 spring:
-  config:
-    activate:
-      on-profile: prod
-  
   datasource:
     url: jdbc:h2:mem:proddb
     driver-class-name: org.h2.Driver
     username: sa
     password: 
-  
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -17,17 +12,16 @@ spring:
     properties:
       hibernate:
         format_sql: false
-  
   h2:
     console:
       enabled: false
 
 server:
-  port: ${PORT:8080}
+  port: ${PORT:10000}
   servlet:
     context-path: /api
 
-# 开放健康端点并设置基路径
+# 新增：开放健康端点并设置基路径
 management:
   endpoints:
     web:
@@ -35,27 +29,20 @@ management:
         include: health,info
       base-path: /actuator
 
-cors:
-  allowed-origins: 
-    - https://oceangpt-frontend.vercel.app
-    - https://oceangpt-frontend.railway.app
-    - http://localhost:3000
-  allowed-methods:
-    - GET
-    - POST
-    - PUT
-    - DELETE
-    - OPTIONS
-  allowed-headers:
-    - "*"
-  allow-credentials: true
-
 oceangpt:
-  # 在容器内设置Python可执行路径，默认指向/opt/venv
+  # 新增：在容器内设置Python可执行路径，默认指向/opt/venv
   python:
     executable: ${PYTHON_EXECUTABLE:/opt/venv/bin/python}
   model:
     # 使用容器内的模型目录，若未设置MODEL_PATH则回退到/app/models
     path: ${MODEL_PATH:/app/models}
     # 生产默认启用Mock以避免缺少真实模型文件导致启动失败，需要真实推理时改为false并挂载模型
-    mock-mode: ${MODEL_MOCK_MODE:true}
+    mock-mode: true
+
+logging:
+  level:
+    com.oceangpt: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
