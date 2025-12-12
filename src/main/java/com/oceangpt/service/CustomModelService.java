@@ -217,47 +217,47 @@ public class CustomModelService {
     private Map<String, Object> callPythonModel(Map<String, Object> inputData) throws Exception {
         Path scriptPath = null;
         
-        // 1. 尝试使用环境变量配置的路径
-        String envScript = System.getenv("PYTHON_SCRIPT_PATH");
-        if (envScript != null && !envScript.trim().isEmpty()) {
-            Path p = Paths.get(envScript.trim());
-            if (Files.exists(p)) {
-                scriptPath = p;
-                logger.info("使用环境变量PYTHON_SCRIPT_PATH指定的脚本: {}", p);
-            } else {
-                logger.warn("环境变量PYTHON_SCRIPT_PATH指定的文件不存在: {}", p);
+        // 0. 优先检查 Docker 容器内的标准路径 (最稳定)
+        Path dockerDefaultPath = Paths.get("/app/model_predictor.py");
+        if (Files.exists(dockerDefaultPath)) {
+            scriptPath = dockerDefaultPath;
+            logger.info("Found script at Docker default path: {}", scriptPath);
+        }
+        
+        // 1. 尝试使用环境变量配置的路径 (仅当 Docker 路径不存在时)
+        if (scriptPath == null) {
+            String envScript = System.getenv("PYTHON_SCRIPT_PATH");
+            if (envScript != null && !envScript.trim().isEmpty()) {
+                Path p = Paths.get(envScript.trim());
+                if (Files.exists(p)) {
+                    scriptPath = p;
+                    logger.info("Using PYTHON_SCRIPT_PATH: {}", p);
+                } else {
+                    logger.warn("PYTHON_SCRIPT_PATH points to non-existent file: {}", p);
+                }
             }
         }
 
-        // 2. 尝试Docker容器默认路径 /app/model_predictor.py
-        if (scriptPath == null) {
-            Path p = Paths.get("/app/model_predictor.py");
-            if (Files.exists(p)) {
-                scriptPath = p;
-                logger.info("找到容器默认路径脚本: {}", p);
-            }
-        }
-        
-        // 3. 尝试配置文件路径
+        // 2. 尝试配置文件路径
         if (scriptPath == null && pythonScriptPath != null && !pythonScriptPath.trim().isEmpty()) {
             Path p = Paths.get(pythonScriptPath.trim());
             if (Files.exists(p)) {
                 scriptPath = p;
-                logger.info("使用配置项oceangpt.model.script-path指定的脚本: {}", p);
+                logger.info("Using oceangpt.model.script-path: {}", p);
             }
         }
         
-        // 4. 尝试从Classpath提取
+        // 3. 尝试从Classpath提取 (本地开发回退方案)
         if (scriptPath == null) {
-            logger.info("尝试从Classpath提取脚本...");
+            logger.info("Extracting script from Classpath...");
             scriptPath = extractScriptToTemp("model_predictor.py");
             if (scriptPath != null) {
-                logger.info("脚本已提取到临时文件: {}", scriptPath);
+                logger.info("Script extracted to temp file: {}", scriptPath);
             }
         }
         
         if (scriptPath == null || !Files.exists(scriptPath)) {
-            throw new RuntimeException("未找到Python脚本: model_predictor.py (已尝试Env, /app/, Config, Classpath)");
+            throw new RuntimeException("Python script not found: model_predictor.py");
         }
 
         try {
@@ -475,6 +475,7 @@ public class CustomModelService {
                 spatialBounds.put("maxLat", lat + 0.005);
                 spatialBounds.put("minLon", lon - 0.005);
                 spatialBounds.put("maxLon", lon + 0.005);
+                spatialBounds.put("spatialRange", 0.01);
                 additionalInfo.put("spatialRange", spatialBounds);
                 additionalInfo.put("spatialRangeDescription", "基于经纬度周边0.01度范围的空间平均反演结果");
 
