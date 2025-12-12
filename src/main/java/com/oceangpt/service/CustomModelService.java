@@ -90,6 +90,23 @@ public class CustomModelService {
             return createErrorResponse(e.getMessage(), request);
         }
     }
+
+    /**
+     * 多目标预测（适配ReportGenerationService）
+     * 将单次预测结果映射为多目标Map格式
+     */
+    public Map<String, PredictionResponse> predictMultipleTargets(PredictionRequest request) {
+        PredictionResponse response = predictWaterQuality(request);
+        Map<String, PredictionResponse> predictions = new HashMap<>();
+        
+        // 将同一个响应对象映射到不同指标键，供ReportGenerationService使用
+        // ReportGenerationService会分别调用 getDinLevel(), getSrpLevel() 等
+        predictions.put("DIN", response);
+        predictions.put("SRP", response);
+        predictions.put("pH", response);
+        
+        return predictions;
+    }
     
     /**
      * 准备Python模型的输入数据
@@ -293,90 +310,537 @@ public class CustomModelService {
         // 最后兜底
         return "python";
     }
-    
-    private boolean canRun(String cmd) {
-        if (cmd == null || cmd.isEmpty()) return false;
+
+    /**
+     * 简单检测可执行是否可调用（运行 --version 即可）
+     */
+    private boolean canRun(String exe) {
+        if (exe == null || exe.isEmpty()) return false;
         try {
-            Process p = new ProcessBuilder(cmd, "--version").start();
-            boolean finished = p.waitFor(2, TimeUnit.SECONDS);
-            return finished && p.exitValue() == 0;
+            Process p = new ProcessBuilder(exe, "--version").start();
+            boolean finished = p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
+            if (!finished) {
+                p.destroyForcibly();
+                return false;
+            }
+            int code = p.exitValue();
+            return code == 0 || code == 1; // 部分发行版返回1也表示打印了版本
         } catch (Exception e) {
             return false;
         }
     }
-
-    private Path extractScriptToTemp(String resourceName) throws IOException {
+    
+    /**
+     * 从classpath提取Python脚本到临时文件，返回可执行路径
+     */
+    private Path extractScriptToTemp(String resourceName) {
         try {
-            ClassPathResource resource = new ClassPathResource(resourceName);
-            if (!resource.exists()) return null;
-            Path tempFile = Files.createTempFile("oceangpt-", "-" + resourceName);
-            Files.copy(resource.getInputStream(), tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            return tempFile;
+            ClassPathResource resource = new ClassPathResource("python/" + resourceName);
+            if (!resource.exists()) {
+                resource = new ClassPathResource(resourceName);
+                if (!resource.exists()) {
+                    logger.error("Classpath中未找到脚本: python/{} 或 {}", resourceName, resourceName);
+                    return null;
+                }
+            }
+            Path tempScript = Files.createTempFile("oceangpt_model_predictor_", ".py");
+            Files.copy(resource.getInputStream(), tempScript, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            return tempScript;
+        } catch (IOException e) {
+            logger.error("提取Python脚本失败", e);
+            return null;
+        }
+    }
+    
+    /**
+     * 构建预测响应
+     */
+    private PredictionResponse buildResponse(Map<String, Object> result, PredictionRequest request) {
+        PredictionResponse response = new PredictionResponse();
+        
+        // 检查是否成功
+        Boolean success = (Boolean) result.get("success");
+        if (success == null || !success) {
+            response.setSuccess(false);
+            response.setErrorMessage(result.get("error") != null ? result.get("error").toString() : "预测失败");
+            return response;
+        }
+        
+        // 设置预测结果
+        response.setSuccess(true);
+        response.setLatitude(request.getLatitude());
+        response.setLongitude(request.getLongitude());
+        response.setPredictionTimestamp(LocalDateTime.now());
+        
+        // 获取预测值
+        @SuppressWarnings("unchecked")
+        Map<String, Object> predictions = (Map<String, Object>) result.get("predictions");
+        
+        if (predictions != null) {
+            Double dinValue = getNumeric(predictions, "DIN", "din");
+            if (dinValue != null) {
+                response.setDinLevel(dinValue);
+                response.setDinUnit("mg/L");
+            }
+            Double srpValue = getNumeric(predictions, "SRP", "srp");
+            if (srpValue != null) {
+                response.setSrpLevel(srpValue);
+                response.setSrpUnit("mg/L");
+            }
+            Double phValue = getNumeric(predictions, "pH", "PH", "ph");
+            if (phValue != null) {
+                response.setPhLevel(phValue);
+                response.setPhUnit("");
+            }
+            
+            // 进行水质等级分类
+            try {
+                WaterQualityClassificationService.WaterQualityClassification classification = 
+                    waterQualityClassificationService.classifyWaterQuality(
+                        response.getDinLevel(), 
+                        response.getSrpLevel(), 
+                        response.getPhLevel()
+                    );
+                
+                // 设置水质等级信息
+                response.setWaterQualityLevel(classification.getGrade().getName());
+                response.setQualityLevel(classification.getGrade().getDescription());
+                
+                // 添加额外信息
+                Map<String, Object> additionalInfo = new HashMap<>();
+                additionalInfo.put("waterQualityGrade", classification.getGrade().getName());
+                additionalInfo.put("waterQualityColor", classification.getGrade().getColor());
+                additionalInfo.put("waterQualityDescription", classification.getGrade().getDescription());
+                additionalInfo.put("waterQualityUsage", classification.getGrade().getUsage());
+                additionalInfo.put("classificationReason", classification.getReason());
+                additionalInfo.put("overallScore", classification.getOverallScore());
+
+                // 添加时空0.01度范围信息
+                Map<String, Double> spatialBounds = new HashMap<>();
+                double lat = request.getLatitude();
+                double lon = request.getLongitude();
+                spatialBounds.put("centerLat", lat);
+                spatialBounds.put("centerLon", lon);
+                spatialBounds.put("minLat", lat - 0.005);
+                spatialBounds.put("maxLat", lat + 0.005);
+                spatialBounds.put("minLon", lon - 0.005);
+                spatialBounds.put("maxLon", lon + 0.005);
+                additionalInfo.put("spatialRange", spatialBounds);
+                additionalInfo.put("spatialRangeDescription", "基于经纬度周边0.01度范围的空间平均反演结果");
+
+                // 区域信息与区域平均值（按月份）
+                Map<String, Object> regionAverage = computeRegionalAverageWithBox(request);
+                if (regionAverage != null) {
+                    additionalInfo.put("regionAverage", regionAverage);
+                }
+
+                // 数据覆盖提醒
+                additionalInfo.put("coverageNotice",
+                    "当前CSV命名为 Sentinel2_Reflectance_bohaiYYYY-MM.csv，仅覆盖渤海区域及近年月份；超出范围将返回模型预测或Mock。");
+                additionalInfo.put("regionName", getRegionName(request.getLatitude(), request.getLongitude()));
+                additionalInfo.put("cityName", getCityName(request.getLatitude(), request.getLongitude()));
+                response.setAdditionalInfo(additionalInfo);
+                
+                logger.info("水质分类完成: {}, 评分: {}",
+                    classification.getGrade().getName(), classification.getOverallScore());
+                
+            } catch (Exception e) {
+                logger.warn("水质分类失败，使用默认等级", e);
+                response.setWaterQualityLevel("三级");
+                response.setQualityLevel("一般");
+            }
+        }
+        
+        // 设置置信度
+        if (result.containsKey("confidence")) {
+            response.setConfidence(((Number) result.get("confidence")).doubleValue());
+        }
+        
+        // 设置模型版本
+        if (result.containsKey("modelVersion")) {
+            response.setModelVersion((String) result.get("modelVersion"));
+        }
+        
+        // 设置水质等级
+        if (result.containsKey("qualityLevel")) {
+            response.setWaterQualityLevel((String) result.get("qualityLevel"));
+        } else if (result.containsKey("waterQualityLevel")) {
+            response.setWaterQualityLevel((String) result.get("waterQualityLevel"));
+        } else {
+            // 基于DIN值确定水质等级（如果没有提供）
+            if (response.getDinLevel() != null) {
+                response.setWaterQualityLevel(determineWaterQualityLevel(response.getDinLevel(), "DIN"));
+            }
+        }
+        
+        return response;
+    }
+    
+    private Map<String, Object> buildInputDataFromSatellite(SatelliteDataResponse sat, LocalDateTime dt) {
+        Map<String, Object> in = new HashMap<>();
+        in.put("latitude", sat.getLatitude());
+        in.put("longitude", sat.getLongitude());
+        if (dt != null) {
+            in.put("month", dt.getMonthValue());
+            in.put("year", dt.getYear());
+        }
+        java.util.List<Double> s2Data = new java.util.ArrayList<>();
+        // Sentinel-2: B2,B3,B4,B5,B6,B7,B8,B8A 补齐到13
+        Map<String, Double> s2 = sat.getS2Data();
+        s2Data.add(s2 != null && s2.get("B2") != null ? s2.get("B2") : 0.0);
+        s2Data.add(s2 != null && s2.get("B3") != null ? s2.get("B3") : 0.0);
+        s2Data.add(s2 != null && s2.get("B4") != null ? s2.get("B4") : 0.0);
+        s2Data.add(s2 != null && s2.get("B5") != null ? s2.get("B5") : 0.0);
+        s2Data.add(s2 != null && s2.get("B6") != null ? s2.get("B6") : 0.0);
+        s2Data.add(s2 != null && s2.get("B7") != null ? s2.get("B7") : 0.0);
+        s2Data.add(s2 != null && s2.get("B8") != null ? s2.get("B8") : 0.0);
+        s2Data.add(s2 != null && s2.get("B8A") != null ? s2.get("B8A") : 0.0);
+        while (s2Data.size() < 13) s2Data.add(0.0);
+        in.put("s2Data", s2Data);
+        
+        java.util.List<Double> s3Data = new java.util.ArrayList<>();
+        Map<String, Double> s3 = sat.getS3Data();
+        for (int i = 1; i <= 8; i++) {
+            String key = String.format("Oa%02d", i);
+            s3Data.add(s3 != null && s3.get(key) != null ? s3.get(key) : 0.0);
+        }
+        while (s3Data.size() < 21) s3Data.add(0.0);
+        in.put("s3Data", s3Data);
+        
+        in.put("chlNN", sat.getChlNN() != null ? sat.getChlNN() : 0.0);
+        in.put("tsmNN", sat.getTsmNN() != null ? sat.getTsmNN() : 0.0);
+        return in;
+    }
+
+    private Double getNumeric(Map<String, Object> map, String... keys) {
+        for (String k : keys) {
+            Object v = map.get(k);
+            if (v == null) continue;
+            if (v instanceof Number) {
+                return ((Number) v).doubleValue();
+            }
+            try {
+                return Double.valueOf(v.toString());
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private boolean getBoolean(Map<String, Object> map, String... keys) {
+        if (map == null) return false;
+        for (String k : keys) {
+            Object v = map.get(k);
+            if (v == null) continue;
+            if (v instanceof Boolean) {
+                if ((Boolean) v) return true;
+            } else {
+                String s = v.toString().trim().toLowerCase();
+                if (s.equals("true") || s.equals("1") || s.equals("yes") || s.equals("y")) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 计算当前点位所在区域的月度区域平均（基于CSV历史数据，若无则返回null）
+     */
+    private Map<String, Object> computeRegionalAverage(Double latitude, Double longitude, LocalDateTime dateTime) {
+        try {
+            if (latitude == null || longitude == null) return null;
+            // 仅当提供了时间时，按月计算区域平均
+            LocalDateTime dt = dateTime != null ? dateTime : LocalDateTime.now();
+            LocalDateTime start = dt.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+            LocalDateTime end = start.plusMonths(1).minusSeconds(1);
+
+            java.util.List<com.oceangpt.model.OceanData> data =
+                dataProcessingService.loadHistoricalDataFromCsv(latitude, longitude, start, end);
+
+            if (data == null || data.isEmpty()) {
+                Map<String, Object> predictedAvg = computePredictedRegionalAverage(latitude, longitude, dt);
+                if (predictedAvg != null) return predictedAvg;
+                Map<String, Object> info = new HashMap<>();
+                info.put("regionName", getRegionName(latitude, longitude));
+                info.put("year", dt.getYear());
+                info.put("month", dt.getMonthValue());
+                info.put("dataCount", 0);
+                info.put("note", "未找到该月份的CSV数据，可能不在渤海覆盖范围或数据未部署。");
+                return info;
+            }
+
+            // 计算平均值（可用参数：温度、盐度、pH、叶绿素、溶解氧、污染指数）
+            double avgTemp = data.stream()
+                .filter(d -> d.getSeaSurfaceTemperature() != null)
+                .mapToDouble(com.oceangpt.model.OceanData::getSeaSurfaceTemperature)
+                .average().orElse(Double.NaN);
+            double avgSalinity = data.stream()
+                .filter(d -> d.getSalinity() != null)
+                .mapToDouble(com.oceangpt.model.OceanData::getSalinity)
+                .average().orElse(Double.NaN);
+            double avgPh = data.stream()
+                .filter(d -> d.getPhLevel() != null)
+                .mapToDouble(com.oceangpt.model.OceanData::getPhLevel)
+                .average().orElse(Double.NaN);
+            double avgChl = data.stream()
+                .filter(d -> d.getChlorophyllConcentration() != null)
+                .mapToDouble(com.oceangpt.model.OceanData::getChlorophyllConcentration)
+                .average().orElse(Double.NaN);
+
+            Map<String, Object> avg = new HashMap<>();
+            avg.put("regionName", getRegionName(latitude, longitude));
+            avg.put("year", dt.getYear());
+            avg.put("month", dt.getMonthValue());
+            avg.put("dataCount", data.size());
+            avg.put("avgSeaSurfaceTemperature", safeValue(avgTemp));
+            avg.put("avgSalinity", safeValue(avgSalinity));
+            avg.put("avgPh", safeValue(avgPh));
+            avg.put("avgChlorophyll", safeValue(avgChl));
+            avg.put("pointLatitude", latitude);
+            avg.put("pointLongitude", longitude);
+            return avg;
         } catch (Exception e) {
-            logger.warn("提取脚本失败: {}", e.getMessage());
+            logger.warn("计算区域平均值失败", e);
+            Map<String, Object> predictedAvg = computePredictedRegionalAverage(latitude, longitude, dateTime != null ? dateTime : LocalDateTime.now());
+            return predictedAvg;
+        }
+    }
+
+    private Map<String, Object> computePredictedRegionalAverage(Double latitude, Double longitude, LocalDateTime dt) {
+        try {
+            double latTol = 0.05;
+            double lonTol = 0.05;
+            double step = 0.1;
+            java.util.List<double[]> grid = new java.util.ArrayList<>();
+            for (double lat = latitude - latTol; lat <= latitude + latTol; lat = Math.round((lat + step) * 100.0) / 100.0) {
+                for (double lon = longitude - lonTol; lon <= longitude + lonTol; lon = Math.round((lon + step) * 100.0) / 100.0) {
+                    grid.add(new double[]{lat, lon});
+                }
+            }
+            int count = 0;
+            double sumDin = 0.0, sumSrp = 0.0, sumPh = 0.0;
+            for (double[] pt : grid) {
+                try {
+                    SatelliteDataResponse sat = dataInterpolationService.getInterpolatedSatelliteData(pt[0], pt[1], dt);
+                    if (sat == null || !sat.isSuccess()) continue;
+                    Map<String, Object> in = buildInputDataFromSatellite(sat, dt);
+                    Map<String, Object> res = callPythonModel(in);
+                    @SuppressWarnings("unchecked") Map<String, Object> preds = (Map<String, Object>) res.get("predictions");
+                    if (preds == null) continue;
+                    Double din = getNumeric(preds, "DIN", "din");
+                    Double srp = getNumeric(preds, "SRP", "srp");
+                    Double ph = getNumeric(preds, "pH", "PH", "ph");
+                    if (din == null || srp == null || ph == null) continue;
+                    sumDin += din; sumSrp += srp; sumPh += ph; count++;
+                } catch (Exception ex) {
+                    // 忽略单点失败
+                }
+            }
+            if (count == 0) return null;
+            Map<String, Object> avg = new HashMap<>();
+            avg.put("regionName", getRegionName(latitude, longitude));
+            avg.put("year", dt.getYear());
+            avg.put("month", dt.getMonthValue());
+            avg.put("gridCount", count);
+            avg.put("gridResolutionDeg", step);
+            avg.put("cityName", getCityName(latitude, longitude));
+            avg.put("avgDIN", sumDin / count);
+            avg.put("avgSRP", sumSrp / count);
+            avg.put("avgPH", sumPh / count);
+            avg.put("note", "基于小范围网格的模型反演平均值");
+            return avg;
+        } catch (Exception e) {
             return null;
         }
     }
 
-    // 辅助方法：构建响应对象 (代码省略，未变更)
-    private PredictionResponse buildResponse(Map<String, Object> result, PredictionRequest request) {
-        PredictionResponse response = new PredictionResponse();
-        response.setSuccess((Boolean) result.getOrDefault("success", false));
-        response.setPredictionId(java.util.UUID.randomUUID().toString());
-        response.setTimestamp(System.currentTimeMillis());
-        
-        if (result.containsKey("predictions")) {
-            Map<String, Object> preds = (Map<String, Object>) result.get("predictions");
-            response.setDinLevel(getDouble(preds, "DIN"));
-            response.setSrpLevel(getDouble(preds, "SRP"));
-            response.setPhLevel(getDouble(preds, "pH"));
+    private Map<String, Object> computePredictedRegionalAverageBox(Double latitude, Double longitude, LocalDateTime dt, Map<String, Object> params) {
+        try {
+            double step = 0.1;
+            Double res = getNumeric(params != null ? params : new HashMap<>(), "gridResolutionDeg", "resolutionDeg");
+            if (res != null && res > 0) step = res;
+            double latMin = latitude - 0.05;
+            double latMax = latitude + 0.05;
+            double lonMin = longitude - 0.05;
+            double lonMax = longitude + 0.05;
+            Double pLatMin = getNumeric(params != null ? params : new HashMap<>(), "bboxLatMin");
+            Double pLatMax = getNumeric(params != null ? params : new HashMap<>(), "bboxLatMax");
+            Double pLonMin = getNumeric(params != null ? params : new HashMap<>(), "bboxLonMin");
+            Double pLonMax = getNumeric(params != null ? params : new HashMap<>(), "bboxLonMax");
+            if (pLatMin != null && pLatMax != null && pLonMin != null && pLonMax != null) {
+                latMin = pLatMin; latMax = pLatMax; lonMin = pLonMin; lonMax = pLonMax;
+            }
+            java.util.List<double[]> grid = new java.util.ArrayList<>();
+            for (double lat = latMin; lat <= latMax; lat = Math.round((lat + step) * 100.0) / 100.0) {
+                for (double lon = lonMin; lon <= lonMax; lon = Math.round((lon + step) * 100.0) / 100.0) {
+                    grid.add(new double[]{lat, lon});
+                }
+            }
+            int count = 0;
+            double sumDin = 0.0, sumSrp = 0.0, sumPh = 0.0;
+            for (double[] pt : grid) {
+                try {
+                    SatelliteDataResponse sat = dataInterpolationService.getInterpolatedSatelliteData(pt[0], pt[1], dt);
+                    if (sat == null || !sat.isSuccess()) continue;
+                    Map<String, Object> in = buildInputDataFromSatellite(sat, dt);
+                    Map<String, Object> resMap = callPythonModel(in);
+                    @SuppressWarnings("unchecked") Map<String, Object> preds = (Map<String, Object>) resMap.get("predictions");
+                    if (preds == null) continue;
+                    Double din = getNumeric(preds, "DIN", "din");
+                    Double srp = getNumeric(preds, "SRP", "srp");
+                    Double ph = getNumeric(preds, "pH", "PH", "ph");
+                    if (din == null || srp == null || ph == null) continue;
+                    sumDin += din; sumSrp += srp; sumPh += ph; count++;
+                } catch (Exception ex) {
+                }
+            }
+            if (count == 0) return null;
+            Map<String, Object> avg = new HashMap<>();
+            avg.put("regionName", getRegionName(latitude, longitude));
+            avg.put("year", dt.getYear());
+            avg.put("month", dt.getMonthValue());
+            avg.put("gridCount", count);
+            avg.put("gridResolutionDeg", step);
+            avg.put("cityName", getCityName(latitude, longitude));
+            avg.put("avgDIN", sumDin / count);
+            avg.put("avgSRP", sumSrp / count);
+            avg.put("avgPH", sumPh / count);
+            avg.put("note", "基于指定边界的小网格模型反演平均值");
+            return avg;
+        } catch (Exception e) {
+            return null;
         }
-        
-        response.setWaterQualityLevel((String) result.getOrDefault("qualityLevel", "UNKNOWN"));
-        response.setConfidence(getDouble(result, "confidence"));
-        response.setModelVersion((String) result.getOrDefault("modelVersion", "Unknown"));
-        
-        return response;
+    }
+
+    private Map<String, Object> computeRegionalAverageWithBox(PredictionRequest request) {
+        try {
+            Map<String, Object> params = request.getAdditionalParams();
+            boolean fast = getBoolean(params, "fast", "快速");
+            boolean skip = getBoolean(params, "skipRegionalAverage", "noRegionalAverage", "跳过区域平均");
+            if (fast || skip) return null;
+            Double latitude = request.getLatitude();
+            Double longitude = request.getLongitude();
+            if (latitude == null || longitude == null) return null;
+            LocalDateTime dt = request.getDateTime() != null ? request.getDateTime() : LocalDateTime.now();
+            LocalDateTime start = dt.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+            LocalDateTime end = start.plusMonths(1).minusSeconds(1);
+            java.util.List<com.oceangpt.model.OceanData> data =
+                dataProcessingService.loadHistoricalDataFromCsv(latitude, longitude, start, end);
+            if (data == null || data.isEmpty()) {
+                return computePredictedRegionalAverageBox(latitude, longitude, dt, request.getAdditionalParams());
+            }
+            double avgTemp = data.stream()
+                .filter(d -> d.getSeaSurfaceTemperature() != null)
+                .mapToDouble(com.oceangpt.model.OceanData::getSeaSurfaceTemperature)
+                .average().orElse(Double.NaN);
+            double avgSalinity = data.stream()
+                .filter(d -> d.getSalinity() != null)
+                .mapToDouble(com.oceangpt.model.OceanData::getSalinity)
+                .average().orElse(Double.NaN);
+            double avgPh = data.stream()
+                .filter(d -> d.getPhLevel() != null)
+                .mapToDouble(com.oceangpt.model.OceanData::getPhLevel)
+                .average().orElse(Double.NaN);
+            double avgChl = data.stream()
+                .filter(d -> d.getChlorophyllConcentration() != null)
+                .mapToDouble(com.oceangpt.model.OceanData::getChlorophyllConcentration)
+                .average().orElse(Double.NaN);
+            Map<String, Object> avg = new HashMap<>();
+            avg.put("regionName", getRegionName(latitude, longitude));
+            avg.put("year", dt.getYear());
+            avg.put("month", dt.getMonthValue());
+            avg.put("dataCount", data.size());
+            avg.put("avgSeaSurfaceTemperature", safeValue(avgTemp));
+            avg.put("avgSalinity", safeValue(avgSalinity));
+            avg.put("avgPh", safeValue(avgPh));
+            avg.put("avgChlorophyll", safeValue(avgChl));
+            avg.put("pointLatitude", latitude);
+            avg.put("pointLongitude", longitude);
+            return avg;
+        } catch (Exception e) {
+            return computePredictedRegionalAverageBox(request.getLatitude(), request.getLongitude(), request.getDateTime() != null ? request.getDateTime() : LocalDateTime.now(), request.getAdditionalParams());
+        }
+    }
+
+    private Object safeValue(double v) {
+        return Double.isNaN(v) ? null : v;
+    }
+
+    /**
+     * 简单区域识别（当前以渤海矩形近似）
+     */
+    private String getRegionName(Double lat, Double lon) {
+        if (lat == null || lon == null) return "未知区域";
+        // 渤海近似边界：纬度[37.0, 41.5]，经度[117.0, 121.8]
+        boolean inBohai = lat >= 37.0 && lat <= 41.5 && lon >= 117.0 && lon <= 121.8;
+        return inBohai ? "渤海" : "非渤海范围";
     }
     
-    private Double getDouble(Map<String, Object> map, String key) {
-        Object val = map.get(key);
-        if (val instanceof Number) return ((Number) val).doubleValue();
-        return 0.0;
+    /**
+     * 根据预测值确定水质等级
+     */
+    private String determineWaterQualityLevel(Double value, String targetType) {
+        if (value == null) return "UNKNOWN";
+        
+        switch (targetType) {
+            case "DIN":
+                if (value < 0.02) return "EXCELLENT";
+                if (value < 0.05) return "GOOD";
+                if (value < 0.1) return "MODERATE";
+                return "POOR";
+                
+            case "SRP":
+                if (value < 0.005) return "EXCELLENT";
+                if (value < 0.01) return "GOOD";
+                if (value < 0.02) return "MODERATE";
+                return "POOR";
+                
+            case "pH":
+                if (value >= 7.5 && value <= 8.5) return "EXCELLENT";
+                if (value >= 7.0 && value <= 9.0) return "GOOD";
+                if (value >= 6.5 && value <= 9.5) return "MODERATE";
+                return "POOR";
+                
+            default:
+                return "UNKNOWN";
+        }
     }
     
-    private PredictionResponse createErrorResponse(String error, PredictionRequest request) {
+    /**
+     * 创建错误响应
+     */
+    private PredictionResponse createErrorResponse(String errorMessage, PredictionRequest request) {
         PredictionResponse response = new PredictionResponse();
         response.setSuccess(false);
-        response.setMessage(error);
-        response.setTimestamp(System.currentTimeMillis());
+        response.setErrorMessage(errorMessage);
+        response.setLatitude(request.getLatitude());
+        response.setLongitude(request.getLongitude());
+        response.setPredictionTimestamp(LocalDateTime.now());
         return response;
     }
     
-    // 多目标预测 (用于报告生成)
-    public Map<String, PredictionResponse> predictMultipleTargets(PredictionRequest request) {
-        PredictionResponse mainResp = predictWaterQuality(request);
-        Map<String, PredictionResponse> map = new HashMap<>();
-        
-        // 构造子响应
-        PredictionResponse din = new PredictionResponse();
-        din.setSuccess(mainResp.isSuccess());
-        din.setDinLevel(mainResp.getDinLevel());
-        din.setConfidence(mainResp.getConfidence());
-        map.put("DIN", din);
-        
-        PredictionResponse srp = new PredictionResponse();
-        srp.setSuccess(mainResp.isSuccess());
-        srp.setSrpLevel(mainResp.getSrpLevel());
-        srp.setConfidence(mainResp.getConfidence());
-        map.put("SRP", srp);
-        
-        PredictionResponse ph = new PredictionResponse();
-        ph.setSuccess(mainResp.isSuccess());
-        ph.setPhLevel(mainResp.getPhLevel());
-        ph.setConfidence(mainResp.getConfidence());
-        map.put("pH", ph);
-        
-        return map;
+    private String getCityName(Double lat, Double lon) {
+        if (lat == null || lon == null) return "未知城市";
+        java.util.List<Object[]> cities = java.util.Arrays.asList(
+            new Object[]{"天津", 39.125, 117.190},
+            new Object[]{"唐山", 39.635, 118.180},
+            new Object[]{"秦皇岛", 39.935, 119.600},
+            new Object[]{"大连", 38.913, 121.614},
+            new Object[]{"烟台", 37.463, 121.447},
+            new Object[]{"青岛", 36.067, 120.382}
+        );
+        String best = "未知城市";
+        double bestDist = Double.MAX_VALUE;
+        for (Object[] c : cities) {
+            double clat = (Double) c[1];
+            double clon = (Double) c[2];
+            double dlat = lat - clat;
+            double dlon = lon - clon;
+            double dist = dlat * dlat + dlon * dlon;
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = (String) c[0];
+            }
+        }
+        return best;
     }
 }
