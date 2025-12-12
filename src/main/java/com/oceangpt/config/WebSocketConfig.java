@@ -31,5 +31,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/chat-ws")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
+        
+        // 注册原生WebSocket端点（不使用SockJS），在某些平台上更稳定
+        registry.addEndpoint("/ws-native")
+                .setAllowedOriginPatterns("*");
     }
 }
