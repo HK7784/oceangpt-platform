@@ -92,9 +92,20 @@ public class AgentOrchestrator {
 
         // 合成消息
         StringBuilder sb = new StringBuilder();
-        if (needPrediction) sb.append("已完成目标水质参数预测。");
-        if (needReport) sb.append("并生成了报告，可进一步查看详情。");
-        if (!needPrediction && !needReport) sb.append("已为您检索并整理相关资料。");
+        if (needPrediction) {
+            sb.append("已为您完成目标水质参数的预测分析。");
+        }
+        if (needReport) {
+            sb.append("详细的水质分析报告已生成，您可以查看附件或询问具体细节。");
+        }
+        if (!needPrediction && !needReport) {
+            sb.append("收到您的请求。");
+            if (response.getData() != null && response.getData().containsKey("ragDocuments")) {
+                sb.append("根据您的查询，我从知识库中为您检索到了相关资料，请参考下方的文档列表。如果您需要进行水质预测或生成报告，请提供具体的经纬度坐标。");
+            } else {
+                sb.append("我是OceanGPT智能助手，可以为您提供水质预测、报告生成和海洋数据查询服务。请问有什么可以帮您？");
+            }
+        }
 
         response.setMessage(sb.toString());
         response.setSuccess(true);
